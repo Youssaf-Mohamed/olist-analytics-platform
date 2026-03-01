@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project Data and Cache
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.sqlite3
+cache/
+.cache/
+.dash_cache/
+
+# AI and Prompts (CRITICAL: Do not upload to GitHub)
+.gemini/
+.agents/
+.cortex/
+brain/
+*prompt*
+*prompts*
+*.md.bak
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

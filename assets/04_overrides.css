@@ -1,0 +1,466 @@
+/* ====================================================================
+   04_overrides.css
+   Dash-specific overrides (DatePicker, Dropdown, RangeSlider, Spinner)
+   NOTE: !important is used intentionally throughout this file to override
+   Dash's bundled component CSS / inline styles. Do not remove without
+   verifying the override still works.
+   ==================================================================== */
+
+/* ── DatePicker ── */
+.DateRangePicker {
+    display: block !important;
+}
+
+.DateRangePickerInput {
+    background-color: var(--input-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+}
+
+.DateRangePickerInput_arrow_svg {
+    fill: var(--muted) !important;
+}
+
+.DateInput {
+    background-color: transparent !important;
+}
+
+.DateInput_input {
+    background-color: transparent !important;
+    color: var(--input-color) !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.85rem !important;
+}
+
+.DateInput_input::placeholder {
+    color: var(--muted) !important;
+}
+
+.DateRangePicker_picker {
+    background-color: var(--glass-bg2) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border: 1px solid var(--border2) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--glass-shadow) !important;
+    z-index: 1050 !important;
+}
+
+.DayPicker {
+    background-color: transparent !important;
+}
+
+.DayPicker_transitionContainer {
+    background-color: transparent !important;
+}
+
+.CalendarMonthGrid,
+.CalendarMonth {
+    background-color: transparent !important;
+}
+
+.CalendarMonth_caption {
+    color: var(--text) !important;
+}
+
+.DayPicker_weekHeader {
+    color: var(--muted) !important;
+}
+
+.CalendarDay {
+    background-color: transparent !important;
+    color: var(--input-color) !important;
+    border: 1px solid var(--border) !important;
+}
+
+.CalendarDay__default:hover {
+    background-color: var(--surface3) !important;
+    color: var(--text) !important;
+}
+
+.CalendarDay__selected,
+.CalendarDay__selected:hover {
+    background: var(--cyan) !important;
+    border-color: var(--cyan) !important;
+    color: #fff !important;
+}
+
+.CalendarDay__selected_span {
+    background: var(--cyan-glow) !important;
+    border-color: var(--cyan) !important;
+    color: var(--text) !important;
+}
+
+.CalendarDay__blocked_out_of_range {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+    color: var(--muted) !important;
+}
+
+/* ── Dropdown (Dash dcc.Dropdown with className="dash-dropdown") ── */
+.dash-dropdown {
+    font-size: 0.95rem !important;
+    font-family: var(--font-body) !important;
+}
+
+/* Brute force dropdown background */
+.dash-dropdown,
+.dash-dropdown .Select,
+.dash-dropdown .Select-control,
+.Select-control,
+.dash-dropdown.Select.is-focused>.Select-control,
+.dash-dropdown.Select.is-open>.Select-control,
+.dash-dropdown.Select.has-value>.Select-control,
+.dash-dropdown>div,
+.dash-dropdown>div>div,
+.dash-dropdown[data-radix-popper-content-wrapper],
+div[class*="Select-control"] {
+    background: var(--input-bg) !important;
+    background-color: var(--input-bg) !important;
+}
+
+.dash-dropdown .Select-control {
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    transition: all var(--transition) !important;
+    min-height: 42px !important;
+}
+
+.dash-dropdown .Select.is-focused>.Select-control,
+.dash-dropdown .Select.is-open>.Select-control {
+    border-color: var(--cyan) !important;
+    box-shadow: 0 0 0 2px var(--cyan-glow) !important;
+}
+
+.dash-dropdown .Select-menu-outer {
+    background-color: #0F1628 !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border: 1px solid rgba(56, 189, 248, 0.15) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+    z-index: 99999 !important;
+    margin-top: 4px !important;
+    overflow: visible !important;
+}
+
+.dash-dropdown .Select-menu {
+    max-height: 280px !important;
+    overflow-y: auto !important;
+    border-radius: 10px !important;
+    background-color: #0F1628 !important;
+}
+
+/* Custom scrollbar for list */
+.dash-dropdown .Select-menu::-webkit-scrollbar {
+    width: 5px;
+}
+
+.dash-dropdown .Select-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dash-dropdown .Select-menu::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.2);
+    border-radius: 4px;
+}
+
+.dash-dropdown .Select-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.35);
+}
+
+/* Dropdown options */
+.dash-dropdown .Select-option,
+.dash-dropdown .VirtualizedSelectOption {
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    padding: 10px 16px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    transition: all 0.15s ease !important;
+}
+
+.dash-dropdown .Select-option.is-focused,
+.dash-dropdown .Select-option:hover,
+.dash-dropdown .VirtualizedSelectFocusedOption {
+    background-color: rgba(56, 189, 248, 0.1) !important;
+    color: #F1F5F9 !important;
+}
+
+.dash-dropdown .Select-option.is-selected {
+    color: var(--cyan) !important;
+    background-color: rgba(56, 189, 248, 0.08) !important;
+    font-weight: 600 !important;
+}
+
+/* Force selected value text color */
+.dash-dropdown .Select-value-label,
+.dash-dropdown .Select-value,
+.dash-dropdown [data-radix-dropdown-menu-trigger],
+.dash-dropdown>div span,
+.dash-dropdown>div div {
+    color: var(--cyan) !important;
+}
+
+.dash-dropdown .Select-placeholder {
+    color: var(--muted) !important;
+}
+
+.dash-dropdown .Select-arrow {
+    border-top-color: #FFFFFF !important;
+}
+
+/* For modern SVG-based arrows */
+.dash-dropdown svg {
+    fill: #FFFFFF !important;
+    color: #FFFFFF !important;
+}
+
+.dash-dropdown .Select-input>input,
+.dash-dropdown-content input {
+    color: var(--cyan) !important;
+}
+
+/* Search box inside the dropdown */
+.dash-dropdown .Select-input {
+    background: transparent !important;
+}
+
+.dash-dropdown .Select-noresults {
+    background-color: #0F1628 !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    padding: 12px 16px !important;
+}
+
+/* Clear indicator */
+.dash-dropdown .Select-clear {
+    color: var(--muted) !important;
+}
+
+.dash-dropdown .Select-clear:hover {
+    color: var(--text) !important;
+}
+
+/* ── Dash 4.x Dropdown (Radix-based) ── */
+/* Radix portal wrapper — ensure it's above everything */
+[data-radix-popper-content-wrapper] {
+    z-index: 99999 !important;
+}
+
+.dash-dropdown-content,
+[data-radix-popper-content-wrapper] .dash-dropdown-content {
+    background-color: #0F1628 !important;
+    border: 1px solid rgba(56, 189, 248, 0.15) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+    overflow: hidden !important;
+}
+
+/* Force inner wrapper containing search input to be transparent */
+.dash-dropdown-content>div:first-child {
+    background-color: transparent !important;
+}
+
+/* Make sure the scrollable list container actually scrolls */
+.dash-dropdown-options-list,
+.dash-dropdown-content>div[data-radix-scroll-area-viewport],
+.dash-dropdown-content>div:nth-child(2) {
+    max-height: 280px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+.dash-dropdown-search {
+    background-color: #131A2E !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 6px !important;
+    color: #38BDF8 !important;
+    /* Cyan instead of white */
+    padding: 8px 12px !important;
+    font-family: var(--font-body) !important;
+    font-size: 0.9rem !important;
+    margin: 8px !important;
+    outline: none !important;
+    width: calc(100% - 16px) !important;
+}
+
+.dash-dropdown-search:focus {
+    border-color: rgba(56, 189, 248, 0.4) !important;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15) !important;
+}
+
+.dash-dropdown-search::placeholder {
+    color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.dash-dropdown-option,
+.dash-options-list-option {
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    padding: 10px 16px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+
+.dash-dropdown-option:hover,
+.dash-options-list-option:hover,
+.dash-dropdown-option[aria-selected="true"],
+.dash-dropdown-option.focused {
+    background-color: rgba(56, 189, 248, 0.1) !important;
+    color: #F1F5F9 !important;
+}
+
+.dash-dropdown-option.selected,
+.dash-dropdown-option[data-selected="true"] {
+    color: #38BDF8 !important;
+    background-color: rgba(56, 189, 248, 0.08) !important;
+    font-weight: 600 !important;
+}
+
+/* Dash 4.x dropdown list scrollbar */
+.dash-dropdown-options-list::-webkit-scrollbar,
+.dash-dropdown-content>div::-webkit-scrollbar {
+    width: 5px;
+}
+
+.dash-dropdown-options-list::-webkit-scrollbar-track,
+.dash-dropdown-content>div::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dash-dropdown-options-list::-webkit-scrollbar-thumb,
+.dash-dropdown-content>div::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.2);
+    border-radius: 4px;
+}
+
+/* ── Range Slider (rc-slider) ── */
+.rc-slider-track {
+    background-color: var(--cyan) !important;
+}
+
+.rc-slider-handle {
+    border-color: var(--cyan) !important;
+    background-color: var(--surface) !important;
+    box-shadow: 0 0 0 3px var(--cyan-glow) !important;
+}
+
+.rc-slider-rail {
+    background-color: var(--surface3) !important;
+}
+
+.rc-slider-tooltip-inner {
+    background-color: var(--surface2) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.rc-slider-tooltip-arrow {
+    border-top-color: var(--surface2) !important;
+}
+
+.rc-slider-mark-text,
+.dash-slider .rc-slider-mark-text,
+.filter-bar .rc-slider-mark-text {
+    color: rgba(255, 255, 255, 0.65) !important;
+    font-size: 11px !important;
+    font-family: var(--font-mono) !important;
+}
+
+.rc-slider-mark-text-active,
+.dash-slider .rc-slider-mark-text-active,
+.filter-bar .rc-slider-mark-text-active {
+    color: #FFFFFF !important;
+}
+
+/* RangeSlider number input boxes — !important needed to override inline styles */
+.filter-bar input[type="number"] {
+    background-color: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    width: 60px;
+    text-align: center;
+    outline: none;
+}
+
+.filter-bar input[type="number"]:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 2px var(--cyan-glow);
+}
+
+/* Improve slider handle interaction */
+.rc-slider-handle:hover {
+    box-shadow: 0 0 0 5px var(--cyan-glow) !important;
+}
+
+.rc-slider-handle:active {
+    box-shadow: 0 0 0 6px var(--cyan-glow) !important;
+}
+
+/* ── LOADING (Custom DASH Spinner) ── */
+._dash-loading {
+    background: transparent !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+._dash-loading::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg);
+    opacity: 0.85;
+    backdrop-filter: blur(8px);
+    z-index: 9998;
+}
+
+._dash-loading::after {
+    content: "";
+    position: fixed;
+    top: calc(50% - 24px);
+    left: calc(50% - 24px);
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--surface3);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin 0.8s ease-in-out infinite;
+    z-index: 9999;
+    box-shadow: 0 0 15px var(--cyan-glow);
+}
+
+/* ── CHART LOADING SPINNER ── */
+.chart-loading-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.chart-loading-wrapper>div[class*="dash-loading"] {
+    position: relative;
+}
+
+.chart-loading-wrapper ._dash-loading-callback {
+    border-radius: var(--radius);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: opacity 0.3s ease;
+}
+
+/* Custom circle spinner glow */
+.chart-loading-wrapper ._dash-loading-callback svg circle {
+    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.5));
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

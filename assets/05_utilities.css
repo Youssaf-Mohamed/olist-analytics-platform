@@ -1,0 +1,109 @@
+/* ====================================================================
+   05_utilities.css
+   Animations, ML-specific CSS rules, and Responsive Media Queries
+   ==================================================================== */
+
+/* ── ML PAGES — SEGMENTATION & FORECASTING ── */
+.page-content {
+    animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.seg-slider {
+    flex: 1;
+    max-width: 260px;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes slideUpFade {
+    0% {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.kpi-grid,
+.rec-grid {
+    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.chart-grid {
+    animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.page-header {
+    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1280px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .chart-grid-3 {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .rec-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 960px) {
+    #sidebar {
+        width: var(--sidebar-collapsed) !important;
+        min-width: var(--sidebar-collapsed) !important;
+    }
+
+    .logo-text-wrap {
+        opacity: 0;
+        width: 0 !important;
+        overflow: hidden;
+    }
+
+    #sidebar-footer {
+        opacity: 0;
+    }
+
+    .nav-label {
+        opacity: 0;
+        width: 0;
+        overflow: hidden;
+    }
+
+    #main-content {
+        padding: 18px 14px;
+    }
+
+    .kpi-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .chart-grid-3,
+    .chart-grid-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .rec-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rec-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    #main-content {
+        padding: 14px 10px;
+    }
+}
