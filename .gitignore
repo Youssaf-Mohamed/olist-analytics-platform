@@ -21,6 +21,8 @@ data/processed/
 cache/
 .cache/
 .dash_cache/
+archive/
+archive
 
 # AI and Prompts (CRITICAL: Do not upload to GitHub)
 .gemini/
