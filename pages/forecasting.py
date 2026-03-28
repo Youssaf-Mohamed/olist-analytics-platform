@@ -9,19 +9,22 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from dash_iconify import DashIconify
-from utils.data_loader import load_master_data
+from components.page_helpers import chart_loading, page_section
+from utils.data_loader import load_data_bundle
 from utils.cleaner import apply_chart_layout, format_brl, tooltip
 from utils.ml_forecasting import build_time_series, forecast_revenue
 
 dash.register_page(__name__, path="/forecasting", name="Forecasting", order=6)
 
 # ── Pre-compute time series once ──────────────────────────────────────────────
-df_master = load_master_data()
-ts_df = build_time_series(df_master)
+DATA_BUNDLE = load_data_bundle()
+orders_df = DATA_BUNDLE["orders"]
+ts_df = build_time_series(orders_df)
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         # Header
         html.Div(
@@ -213,9 +216,9 @@ layout = html.Div(
                             [
                                 html.P(
                                     [
-                                        "Model Accuracy",
+                                        "Backtest Accuracy",
                                         tooltip(
-                                            "In-sample predictive accuracy. Focus on R² (closer to 1 is better) and MAPE (error %)."
+                                            "Chronological holdout accuracy. Focus on R2 (closer to 1 is better) and MAPE (lower is better)."
                                         ),
                                     ],
                                     className="kpi-label",
@@ -261,15 +264,12 @@ layout = html.Div(
                     "Actual vs Predicted daily revenue with confidence interval",
                     className="chart-subtitle",
                 ),
-                dcc.Loading(
+                chart_loading(
                     dcc.Graph(
                         id="fc-area-chart",
                         config={"displayModeBar": False},
                         style={"height": "420px"},
                     ),
-                    type="circle",
-                    color="#38BDF8",
-                    parent_className="chart-loading-wrapper",
                     overlay_style={"visibility": "visible", "opacity": 0.6, "backgroundColor": "rgba(11,14,23,0.7)"},
                 ),
             ],
@@ -293,15 +293,12 @@ layout = html.Div(
                     "Historical actuals + forecasted months side by side",
                     className="chart-subtitle",
                 ),
-                dcc.Loading(
+                chart_loading(
                     dcc.Graph(
                         id="fc-monthly-bar",
                         config={"displayModeBar": False},
                         style={"height": "320px"},
                     ),
-                    type="circle",
-                    color="#38BDF8",
-                    parent_className="chart-loading-wrapper",
                     overlay_style={"visibility": "visible", "opacity": 0.6, "backgroundColor": "rgba(11,14,23,0.7)"},
                 ),
             ],
@@ -310,7 +307,8 @@ layout = html.Div(
         # Store
         dcc.Store(id="fc-horizon-store", data=90),
     ],
-    className="page-content",
+        className="page-content",
+    ),
 )
 
 
@@ -354,9 +352,16 @@ clientside_callback(
     Output("fc-kpi-acc-info", "children"),
     Output("fc-area-chart", "figure"),
     Output("fc-monthly-bar", "figure"),
+    Output("forecasting-page-context", "data"),
     Input("fc-horizon-store", "data"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def _update_forecast(horizon_days):
+def _update_forecast(horizon_days, theme="dark", applied_theme="dark"):
+    from utils.cleaner import get_chart_theme
+
+    theme = applied_theme or theme or "dark"
+    palette = get_chart_theme(theme)
     horizon_days = int(horizon_days or 90)
     hist, fc, metrics, monthly = forecast_revenue(ts_df, horizon_days=horizon_days)
 
@@ -366,8 +371,11 @@ def _update_forecast(horizon_days):
     peak_str = metrics["peak_month"]
     peak_val = format_brl(metrics["peak_month_value"])
     daily_str = format_brl(metrics["avg_daily"])
-    acc_str = f"R²: {metrics['r2_score']:.2f}"
-    acc_info = f"MAPE: {metrics['mape']*100:.1f}%, MAE: R$ {metrics['mae']:,.0f}"
+    acc_str = f"Backtest R2: {metrics['r2_score']:.2f}"
+    acc_info = (
+        f"{metrics['backtest_days']}d holdout | "
+        f"MAPE: {metrics['mape']*100:.1f}%, MAE: R$ {metrics['mae']:,.0f}"
+    )
 
     # ── Area chart ─────────────────────────────────────────────────────────────
     # Show only last 180 days of history for readability
@@ -447,12 +455,12 @@ def _update_forecast(horizon_days):
         xshift=6,
     )
 
-    apply_chart_layout(fig_area, height=410)
+    apply_chart_layout(fig_area, height=410, theme=theme)
     fig_area.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(11,14,23,0.4)",
-        xaxis=dict(gridcolor="#1A1F35"),
-        yaxis=dict(title="Revenue (R$)", gridcolor="#1A1F35"),
+        plot_bgcolor="rgba(11,14,23,0.4)" if theme != "light" else "rgba(255,255,255,0.55)",
+        xaxis=dict(gridcolor=palette["gridcolor"]),
+        yaxis=dict(title="Revenue (R$)", gridcolor=palette["gridcolor"]),
         legend=dict(orientation="h", y=1.06, x=0),
         hovermode="x unified",
     )
@@ -488,14 +496,34 @@ def _update_forecast(horizon_days):
         )
     )
 
-    apply_chart_layout(fig_bar, height=310)
+    apply_chart_layout(fig_bar, height=310, theme=theme)
     fig_bar.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(11,14,23,0.4)",
+        plot_bgcolor="rgba(11,14,23,0.4)" if theme != "light" else "rgba(255,255,255,0.55)",
         barmode="overlay",
-        xaxis=dict(gridcolor="#1A1F35"),
-        yaxis=dict(title="Revenue (R$)", gridcolor="#1A1F35"),
+        xaxis=dict(gridcolor=palette["gridcolor"]),
+        yaxis=dict(title="Revenue (R$)", gridcolor=palette["gridcolor"]),
         legend=dict(orientation="h", y=1.06, x=0),
     )
 
-    return total_str, growth_str, peak_str, peak_val, daily_str, acc_str, acc_info, fig_area, fig_bar
+    context = {
+        "page": "forecasting",
+        "filters": {"horizon_days": horizon_days},
+        "headline_metrics": {
+            "forecast_total": total_str,
+            "growth_rate": growth_str,
+            "peak_month": peak_str,
+        },
+    }
+    return (
+        total_str,
+        growth_str,
+        peak_str,
+        peak_val,
+        daily_str,
+        acc_str,
+        acc_info,
+        fig_area,
+        fig_bar,
+        context,
+    )

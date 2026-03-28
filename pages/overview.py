@@ -3,25 +3,43 @@ pages/overview.py — Page 1: Sales Overview
 KPIs + Revenue Over Time + Orders by Status + Top 10 Categories
 """
 
+from functools import lru_cache
+
 import dash
 from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
 from dash_iconify import DashIconify
 
-from utils.data_loader import load_master_data
-from utils.cleaner import apply_chart_layout, filter_by_date, format_brl, pct, tooltip
+from components.page_helpers import chart_loading, page_section
+from utils.data_loader import load_data_bundle
+from utils.cleaner import (
+    apply_chart_layout,
+    filter_by_date,
+    filter_by_date_column,
+    format_brl,
+    get_chart_theme,
+    pct,
+    tooltip,
+)
 
 dash.register_page(__name__, path="/", name="Overview", order=0)
 
 # ── Load data once at module level ────────────────────────────────────────────
-df_master = load_master_data()
-DATE_MIN = df_master["order_purchase_timestamp"].min().date()
-DATE_MAX = df_master["order_purchase_timestamp"].max().date()
+DATA_BUNDLE = load_data_bundle()
+orders_df = DATA_BUNDLE["orders"]
+order_items_df = DATA_BUNDLE["order_items"]
+orders_daily_df = DATA_BUNDLE["agg_orders_daily"]
+status_daily_df = DATA_BUNDLE["agg_status_daily"]
+category_daily_df = DATA_BUNDLE["agg_category_daily"]
+dow_hour_daily_df = DATA_BUNDLE["agg_dow_hour_daily"]
+DATE_MIN = orders_df["order_purchase_timestamp"].min().date()
+DATE_MAX = orders_df["order_purchase_timestamp"].max().date()
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         # Header
         html.Div(
@@ -34,21 +52,9 @@ layout = html.Div(
             ],
             className="page-header",
         ),
-        # Date filter
         html.Div(
-            [
-                html.Span("Date Range:", className="filter-label"),
-                dcc.DatePickerRange(
-                    id="overview-date-range",
-                    min_date_allowed=DATE_MIN,
-                    max_date_allowed=DATE_MAX,
-                    start_date=DATE_MIN,
-                    end_date=DATE_MAX,
-                    display_format="YYYY-MM-DD",
-                    style={"fontFamily": "Space Mono"},
-                ),
-            ],
-            className="filter-bar",
+            "This page follows the global date range in the top bar for a consistent executive view.",
+            className="global-filter-note",
         ),
         # KPI cards
         html.Div(
@@ -238,13 +244,10 @@ layout = html.Div(
                         html.P(
                             "Monthly revenue trend (R$)", className="chart-subtitle"
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(
                                 id="chart-revenue-time", config={"displayModeBar": False}
                             ),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -261,13 +264,10 @@ layout = html.Div(
                         html.P(
                             "Distribution of order statuses", className="chart-subtitle"
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(
                                 id="chart-orders-status", config={"displayModeBar": False}
                             ),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -279,13 +279,10 @@ layout = html.Div(
                             "Sum of item_price + freight per category",
                             className="chart-subtitle",
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(
                                 id="chart-top-categories", config={"displayModeBar": False}
                             ),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -312,13 +309,10 @@ layout = html.Div(
                             "Identify peak shopping times (Local Time)", 
                             className="chart-subtitle"
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(
                                 id="chart-revenue-heatmap", config={"displayModeBar": False}
                             ),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -328,7 +322,8 @@ layout = html.Div(
             style={"marginTop": "20px"},
         ),
     ],
-    style={"maxWidth": "1600px"},
+        style={"maxWidth": "1600px"},
+    ),
 )
 
 
@@ -345,21 +340,33 @@ layout = html.Div(
     Output("chart-orders-status", "figure"),
     Output("chart-top-categories", "figure"),
     Output("chart-revenue-heatmap", "figure"),
-    Input("overview-date-range", "start_date"),
-    Input("overview-date-range", "end_date"),
+    Output("overview-page-context", "data"),
+    Input("global-date-range", "start_date"),
+    Input("global-date-range", "end_date"),
+    Input("global-compare-toggle", "value"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def update_overview(start_date, end_date):
+def update_overview(start_date, end_date, compare_values, theme="dark", applied_theme="dark"):
+    theme = applied_theme or theme or "dark"
+    palette = get_chart_theme(theme)
     dff = (
-        filter_by_date(df_master, start_date, end_date)
+        filter_by_date(orders_df, start_date, end_date)
         if start_date and end_date
-        else df_master.copy()
+        else orders_df.copy()
     )
+    items_dff = (
+        filter_by_date(order_items_df, start_date, end_date)
+        if start_date and end_date
+        else order_items_df.copy()
+    )
+    delivered_dff = dff[dff["order_status"] == "delivered"].copy()
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
     total_rev = dff["total_order_value"].sum()
     total_ord = dff["order_id"].nunique()
     avg_review = dff["review_score"].mean()
-    on_time = dff["is_on_time"].mean()
+    on_time = delivered_dff["is_on_time"].mean()
     aov = total_rev / max(total_ord, 1)
 
     # ── MoM Growth ───────────────────────────────────────────────────────────
@@ -368,10 +375,9 @@ def update_overview(start_date, end_date):
     ed = pd.Timestamp(end_date) if end_date else dff["order_purchase_timestamp"].max()
     delta = ed - sd
     prev_start = sd - delta - pd.Timedelta(days=1)
-    prev_end = sd - pd.Timedelta(days=1)
-    prev = df_master[
-        (df_master["order_purchase_timestamp"] >= prev_start)
-        & (df_master["order_purchase_timestamp"] <= prev_end)
+    prev = orders_df[
+        (orders_df["order_purchase_timestamp"] >= prev_start)
+        & (orders_df["order_purchase_timestamp"] < sd)
     ]
     prev_rev = prev["total_order_value"].sum()
     prev_ord = prev["order_id"].nunique()
@@ -417,14 +423,14 @@ def update_overview(start_date, end_date):
             x=monthly["month"],
             y=monthly["revenue"],
             mode="lines+markers",
-            line=dict(color="#00D4FF", width=2.5),
-            marker=dict(color="#00D4FF", size=5),
+            line=dict(color=palette["colorway"][0], width=2.5),
+            marker=dict(color=palette["colorway"][0], size=5),
             fill="tozeroy",
-            fillcolor="rgba(0,212,255,0.07)",
+            fillcolor="rgba(0,212,255,0.07)" if theme != "light" else "rgba(2,132,199,0.10)",
             hovertemplate="<b>%{x}</b><br>R$ %{y:,.0f}<extra></extra>",
         )
     )
-    apply_chart_layout(fig_time, height=280)
+    apply_chart_layout(fig_time, height=280, theme=theme)
 
     # ── Orders by Status ──────────────────────────────────────────────────────
     status_counts = (
@@ -450,12 +456,12 @@ def update_overview(start_date, end_date):
                     "#8B5CF6", 
                     "#38BDF8",
                 ],
-                line=dict(color="rgba(19, 23, 42, 0.8)", width=3), # Add a dark gap between slices
+                line=dict(color=palette["hover_border"], width=3),
             ),
             hovertemplate="<div style='padding:4px;'><b>%{label}</b><br><span style='font-size:16px'>%{value:,} orders</span><br><span style='color:#38BDF8'>%{percent}</span></div><extra></extra>",
         )
     )
-    apply_chart_layout(fig_status, height=300)
+    apply_chart_layout(fig_status, height=300, theme=theme)
     fig_status.update_layout(
         showlegend=True,
         legend={
@@ -464,7 +470,7 @@ def update_overview(start_date, end_date):
             "y": 0.5,
             "xanchor": "left",
             "x": 0.85,
-            "font": {"family": "Inter", "size": 11, "color": "#94A3B8"},
+            "font": {"family": "Inter", "size": 11, "color": palette["legend_color"]},
             "bgcolor": "rgba(0,0,0,0)",
         },
         margin={"l": 0, "r": 120, "t": 10, "b": 10},
@@ -473,14 +479,14 @@ def update_overview(start_date, end_date):
                 "text": f"{total_ord:,}",
                 "x": 0.38, 
                 "y": 0.55, 
-                "font": {"size": 24, "family": "Plus Jakarta Sans", "color": "#E2E8F0"},
+                "font": {"size": 24, "family": "Plus Jakarta Sans", "color": palette["font_color"]},
                 "showarrow": False,
             },
             {
                 "text": "Total",
                 "x": 0.38, 
                 "y": 0.43, 
-                "font": {"size": 12, "family": "Inter", "color": "#94A3B8"},
+                "font": {"size": 12, "family": "Inter", "color": palette["legend_color"]},
                 "showarrow": False,
             }
         ]
@@ -488,14 +494,14 @@ def update_overview(start_date, end_date):
 
     # ── Top 10 Categories ─────────────────────────────────────────────────────
     cat_rev = (
-        dff.groupby("product_category_name_english")["total_order_value"]
+        items_dff.groupby("product_category_name_english")["line_total"]
         .sum()
         .nlargest(10)
         .reset_index()
         .rename(
             columns={
                 "product_category_name_english": "category",
-                "total_order_value": "revenue",
+                "line_total": "revenue",
             }
         )
         .sort_values("revenue")
@@ -507,13 +513,13 @@ def update_overview(start_date, end_date):
             orientation="h",
             marker=dict(
                 color=cat_rev["revenue"],
-                colorscale=[[0, "#1E2433"], [0.5, "#7C3AED"], [1, "#00D4FF"]],
+                colorscale=[[0, "#1E2433"], [0.5, "#7C3AED"], [1, "#00D4FF"]] if theme != "light" else [[0, "#DBEAFE"], [0.5, "#7C3AED"], [1, "#0284C7"]],
                 line=dict(width=0),
             ),
             hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f}<extra></extra>",
         )
     )
-    apply_chart_layout(fig_cat, height=300)
+    apply_chart_layout(fig_cat, height=300, theme=theme)
     fig_cat.update_layout(yaxis=dict(tickfont=dict(size=10)))
 
     # ── Revenue Heatmap ───────────────────────────────────────────────────────
@@ -535,14 +541,14 @@ def update_overview(start_date, end_date):
             z=hm_pivot.values,
             x=[f"{h:02d}:00" for h in hm_pivot.columns],
             y=hm_pivot.index,
-            colorscale=[[0, "#0B0E17"], [0.2, "#1E293B"], [0.5, "#8B5CF6"], [1.0, "#00D4FF"]],
+            colorscale=[[0, "#0B0E17"], [0.2, "#1E293B"], [0.5, "#8B5CF6"], [1.0, "#00D4FF"]] if theme != "light" else [[0, "#E2E8F0"], [0.2, "#BFDBFE"], [0.5, "#8B5CF6"], [1.0, "#0284C7"]],
             showscale=False,
             hovertemplate="<b>%{y} at %{x}</b><br>Revenue: R$ %{z:,.0f}<extra></extra>",
             xgap=2,
             ygap=2,
         )
     )
-    apply_chart_layout(fig_hm, height=320)
+    apply_chart_layout(fig_hm, height=320, theme=theme)
     # Reverse y-axis so Monday is at the top
     fig_hm.update_layout(
         xaxis=dict(gridcolor="rgba(0,0,0,0)", fixedrange=True, tickangle=-45),
@@ -550,9 +556,7 @@ def update_overview(start_date, end_date):
         margin=dict(l=80, r=20, t=10, b=20),
     )
 
-    return (
-        format_brl(total_rev),
-        f"{total_ord:,}",
+    review_display = (
         html.Div(
             [
                 html.Span(f"{avg_review:.2f}"),
@@ -563,8 +567,32 @@ def update_overview(start_date, end_date):
                 ),
             ],
             style={"display": "flex", "alignItems": "center"},
-        ),
-        pct(on_time),
+        )
+        if pd.notna(avg_review)
+        else "N/A"
+    )
+    on_time_display = pct(on_time) if pd.notna(on_time) else "N/A"
+    context = {
+        "page": "overview",
+        "filters": {
+            "start_date": start_date,
+            "end_date": end_date,
+            "compare_previous": "compare" in (compare_values or []),
+        },
+        "headline_metrics": {
+            "total_revenue": format_brl(total_rev),
+            "total_orders": f"{total_ord:,}",
+            "avg_review": f"{avg_review:.2f}" if pd.notna(avg_review) else "N/A",
+            "on_time_rate": on_time_display,
+            "avg_order_value": format_brl(aov),
+        },
+    }
+
+    return (
+        format_brl(total_rev),
+        f"{total_ord:,}",
+        review_display,
+        on_time_display,
         format_brl(aov),
         rev_delta,
         ord_delta,
@@ -572,4 +600,5 @@ def update_overview(start_date, end_date):
         fig_status,
         fig_cat,
         fig_hm,
+        context,
     )

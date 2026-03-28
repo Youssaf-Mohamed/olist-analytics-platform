@@ -8,19 +8,22 @@ from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go
 from dash_iconify import DashIconify
 
-from utils.data_loader import load_master_data
+from components.page_helpers import page_section
+from utils.data_loader import load_data_bundle
 from utils.cleaner import apply_chart_layout, filter_by_date, format_brl, pct, tooltip
 
 dash.register_page(__name__, path="/sellers", name="Sellers", order=7)
 
 # ── Load data once ────────────────────────────────────────────────────────────
-df_master = load_master_data()
-DATE_MIN = df_master["order_purchase_timestamp"].min().date()
-DATE_MAX = df_master["order_purchase_timestamp"].max().date()
+DATA_BUNDLE = load_data_bundle()
+seller_orders_df = DATA_BUNDLE["seller_orders"]
+DATE_MIN = seller_orders_df["order_purchase_timestamp"].min().date()
+DATE_MAX = seller_orders_df["order_purchase_timestamp"].max().date()
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         # Header
         html.Div(
@@ -33,21 +36,9 @@ layout = html.Div(
             ],
             className="page-header",
         ),
-        # Date filter
         html.Div(
-            [
-                html.Span("Date Range:", className="filter-label"),
-                dcc.DatePickerRange(
-                    id="sellers-date-range",
-                    min_date_allowed=DATE_MIN,
-                    max_date_allowed=DATE_MAX,
-                    start_date=DATE_MIN,
-                    end_date=DATE_MAX,
-                    display_format="YYYY-MM-DD",
-                    style={"fontFamily": "Space Mono"},
-                ),
-            ],
-            className="filter-bar",
+            "This page follows the global date range in the top bar so seller comparisons stay aligned with the rest of the dashboard.",
+            className="global-filter-note",
         ),
         # KPI cards
         html.Div(
@@ -372,7 +363,8 @@ layout = html.Div(
             className="chart-grid chart-grid-1",
         ),
     ],
-    style={"maxWidth": "1600px"},
+        style={"maxWidth": "1600px"},
+    ),
 )
 
 
@@ -387,14 +379,19 @@ layout = html.Div(
     Output("sellers-scatter", "figure"),
     Output("sellers-ontime-state", "figure"),
     Output("sellers-table-wrap", "children"),
-    Input("sellers-date-range", "start_date"),
-    Input("sellers-date-range", "end_date"),
+    Output("sellers-page-context", "data"),
+    Input("global-date-range", "start_date"),
+    Input("global-date-range", "end_date"),
+    Input("global-compare-toggle", "value"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def update_sellers(start_date, end_date):
+def update_sellers(start_date, end_date, compare_values, theme="dark", applied_theme="dark"):
+    theme = applied_theme or theme or "dark"
     dff = (
-        filter_by_date(df_master, start_date, end_date)
+        filter_by_date(seller_orders_df, start_date, end_date)
         if start_date and end_date
-        else df_master.copy()
+        else seller_orders_df.copy()
     )
 
     # ── Seller-level aggregation ──────────────────────────────────────────────
@@ -402,7 +399,7 @@ def update_sellers(start_date, end_date):
         dff.dropna(subset=["seller_id"])
         .groupby("seller_id")
         .agg(
-            revenue=("total_order_value", "sum"),
+            revenue=("seller_revenue", "sum"),
             orders=("order_id", "nunique"),
             avg_rating=("review_score", "mean"),
             avg_delivery=("delivery_days", "mean"),
@@ -450,7 +447,7 @@ def update_sellers(start_date, end_date):
             ),
         )
     )
-    apply_chart_layout(fig_top, height=320)
+    apply_chart_layout(fig_top, height=320, theme=theme)
     fig_top.update_layout(yaxis=dict(tickfont=dict(size=10)))
 
     # ── Seller Distribution by State ──────────────────────────────────────────
@@ -475,7 +472,7 @@ def update_sellers(start_date, end_date):
             hovertemplate="<b>%{x}</b><br>%{y} sellers<extra></extra>",
         )
     )
-    apply_chart_layout(fig_state, height=320)
+    apply_chart_layout(fig_state, height=320, theme=theme)
     fig_state.update_layout(xaxis_title="State", yaxis_title="Sellers")
 
     # ── Seller Rating vs Delivery Speed Scatter ───────────────────────────────
@@ -521,7 +518,7 @@ def update_sellers(start_date, end_date):
             ),
         )
     )
-    apply_chart_layout(fig_scatter, height=320)
+    apply_chart_layout(fig_scatter, height=320, theme=theme)
     fig_scatter.update_layout(
         xaxis_title="Avg Delivery Days",
         yaxis_title="Avg Review Score",
@@ -549,7 +546,7 @@ def update_sellers(start_date, end_date):
             hovertemplate="<b>%{y}</b><br>On-Time: %{x:.1%}<extra></extra>",
         )
     )
-    apply_chart_layout(fig_ontime, height=320)
+    apply_chart_layout(fig_ontime, height=320, theme=theme)
     fig_ontime.update_layout(
         xaxis=dict(title="On-Time Rate", tickformat=".0%"),
     )
@@ -583,7 +580,7 @@ def update_sellers(start_date, end_date):
                     html.Td(
                         row["seller_id"][:12] + "…",
                         title=row["seller_id"],
-                        style={"fontFamily": "var(--font-mono)", "fontSize": "0.72rem"},
+                        style={"fontFamily": "var(--font-mono)", "fontSize": "0.84rem"},
                     ),
                     html.Td(
                         html.Span(row["seller_state"], className="badge badge-cyan")
@@ -620,6 +617,20 @@ def update_sellers(start_date, end_date):
         className="data-table",
     )
 
+    context = {
+        "page": "sellers",
+        "filters": {
+            "start_date": start_date,
+            "end_date": end_date,
+            "compare_previous": "compare" in (compare_values or []),
+        },
+        "headline_metrics": {
+            "seller_count": int(n_sellers),
+            "avg_seller_revenue": format_brl(avg_rev),
+            "avg_seller_rating": f"{avg_rating:.2f}" if avg_rating == avg_rating else "N/A",
+        },
+    }
+
     return (
         f"{n_sellers:,}",
         format_brl(avg_rev),
@@ -640,4 +651,5 @@ def update_sellers(start_date, end_date):
         fig_scatter,
         fig_ontime,
         html.Div(table, className="data-table-wrap"),
+        context,
     )

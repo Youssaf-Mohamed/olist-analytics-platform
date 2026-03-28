@@ -11,7 +11,8 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from dash_iconify import DashIconify
-from utils.data_loader import load_master_data
+from components.page_helpers import page_section
+from utils.data_loader import load_data_bundle
 from utils.cleaner import apply_chart_layout, tooltip
 from utils.ml_segmentation import (
     compute_rfm,
@@ -23,14 +24,16 @@ from utils.ml_segmentation import (
 dash.register_page(__name__, path="/segmentation", name="Segmentation", order=5)
 
 # ── Pre-compute RFM once at module level ──────────────────────────────────────
-df_master = load_master_data()
-rfm_base = compute_rfm(df_master)
+DATA_BUNDLE = load_data_bundle()
+orders_df = DATA_BUNDLE["orders"]
+rfm_base = compute_rfm(orders_df)
 
 
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         # Header
         html.Div(
@@ -53,7 +56,7 @@ layout = html.Div(
                     max=6,
                     step=1,
                     value=4,
-                    marks={i: {"label": str(i), "style": {"color": "#E2E8F0"}} for i in range(3, 7)},
+                    marks={i: {"label": str(i), "style": {"color": "var(--text-soft)"}} for i in range(3, 7)},
                     tooltip={"placement": "bottom", "always_visible": False},
                     className="seg-slider",
                 ),
@@ -334,7 +337,8 @@ layout = html.Div(
         ),
         # Store for clustered data removed for performance
     ],
-    className="page-content",
+        className="page-content",
+    ),
 )
 
 
@@ -349,9 +353,13 @@ layout = html.Div(
     Output("seg-scatter", "figure"),
     Output("seg-donut", "figure"),
     Output("seg-heatmap", "figure"),
+    Output("segmentation-page-context", "data"),
     Input("seg-cluster-slider", "value"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def _update_segmentation(n_clusters):
+def _update_segmentation(n_clusters, theme="dark", applied_theme="dark"):
+    theme = applied_theme or theme or "dark"
     # Cluster locally in memory without serialising huge JSON back to client
     rfm, metrics = cluster_customers(rfm_base, n_clusters=int(n_clusters))
     
@@ -393,7 +401,7 @@ def _update_segmentation(n_clusters):
         opacity=0.72,
     )
     fig_scatter.update_traces(marker=dict(size=5))
-    apply_chart_layout(fig_scatter, height=400)
+    apply_chart_layout(fig_scatter, height=400, theme=theme)
     fig_scatter.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(11,14,23,0.4)",
@@ -421,10 +429,21 @@ def _update_segmentation(n_clusters):
         showlegend=False,
         margin=dict(l=10, r=10, t=10, b=10),
         height=400,
-        font=dict(family="Inter, sans-serif", color="#E2E8F0", size=12),
+        font=dict(
+            family="Inter, sans-serif",
+            color="#E2E8F0" if theme != "light" else "#0F172A",
+            size=12,
+        ),
     )
     
     # ── Heatmap/Table ─────────────────────────────────────────────────────────
+    table_header_fill = "#FFFFFF" if theme == "light" else "#1A1F35"
+    table_header_font = "#0F172A" if theme == "light" else "#38BDF8"
+    table_cell_fill = "#FFFFFF" if theme == "light" else "#13172A"
+    table_cell_alt_fill = "#F8FAFC" if theme == "light" else "#0B0E17"
+    table_cell_font = "#334155" if theme == "light" else "#94A3B8"
+    table_line_color = "#D7E0EC" if theme == "light" else "#252D47"
+
     fig_table = go.Figure(
         go.Table(
             header=dict(
@@ -437,13 +456,13 @@ def _update_segmentation(n_clusters):
                     "<b>Avg Revenue (R$)</b>",
                     "<b>Actionable Insight</b>",
                 ],
-                fill_color="#1A1F35",
+                fill_color=table_header_fill,
                 font=dict(
-                    color="#38BDF8", size=12, family="Plus Jakarta Sans, sans-serif"
+                    color=table_header_font, size=14, family="Plus Jakarta Sans, sans-serif"
                 ),
                 align="left",
-                line_color="#252D47",
-                height=36,
+                line_color=table_line_color,
+                height=44,
             ),
             cells=dict(
                 values=[
@@ -455,20 +474,30 @@ def _update_segmentation(n_clusters):
                     summary["avg_monetary"].apply(lambda v: f"R$ {v:,.0f}"),
                     summary["insight"],
                 ],
-                fill_color=[["#13172A", "#0B0E17"] * len(summary)],
-                font=dict(color="#94A3B8", size=12, family="Inter, sans-serif"),
+                fill_color=[[table_cell_fill, table_cell_alt_fill] * len(summary)],
+                font=dict(color=table_cell_font, size=13, family="Inter, sans-serif"),
                 align="left",
-                line_color="#252D47",
-                height=32,
+                line_color=table_line_color,
+                height=40,
             ),
         )
     )
     fig_table.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=0, r=0, t=0, b=0),
-        height=260,
+        height=320,
         font=dict(family="Inter, sans-serif"),
     )
+
+    context = {
+        "page": "segmentation",
+        "filters": {"clusters": int(n_clusters)},
+        "headline_metrics": {
+            "customers": int(total),
+            "champions": int(champions),
+            "at_risk": int(at_risk),
+        },
+    }
 
     return (
         kpi_total,
@@ -480,4 +509,5 @@ def _update_segmentation(n_clusters):
         fig_scatter,
         fig_donut,
         fig_table,
+        context,
     )

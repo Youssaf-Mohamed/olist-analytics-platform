@@ -9,15 +9,25 @@ import plotly.graph_objects as go
 import requests
 from dash_iconify import DashIconify
 
-from utils.data_loader import load_master_data
-from utils.cleaner import apply_chart_layout, filter_by_date, format_brl, tooltip
+from components.page_helpers import page_section
+from utils.data_loader import load_data_bundle
+from utils.cleaner import (
+    apply_chart_layout,
+    filter_by_date_column,
+    format_brl,
+    get_chart_theme,
+    tooltip,
+)
 
 dash.register_page(__name__, path="/geography", name="Geography", order=1)
 
 # ── Load data once ────────────────────────────────────────────────────────────
-df_master = load_master_data()
-DATE_MIN = df_master["order_purchase_timestamp"].min().date()
-DATE_MAX = df_master["order_purchase_timestamp"].max().date()
+DATA_BUNDLE = load_data_bundle()
+orders_df = DATA_BUNDLE["orders"]
+state_daily_df = DATA_BUNDLE["agg_state_daily"]
+city_daily_df = DATA_BUNDLE["agg_city_daily"]
+DATE_MIN = orders_df["order_purchase_timestamp"].min().date()
+DATE_MAX = orders_df["order_purchase_timestamp"].max().date()
 
 # ── Brazil GeoJSON ────────────────────────────────────────────────────────────
 GEOJSON_URL = (
@@ -72,7 +82,8 @@ METRIC_OPTIONS = [
 ]
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         html.Div(
             [
@@ -88,18 +99,8 @@ layout = html.Div(
         html.Div(
             [
                 html.Div(
-                    [
-                        html.Span("Date Range:", className="filter-label"),
-                        dcc.DatePickerRange(
-                            id="geo-date-range",
-                            min_date_allowed=DATE_MIN,
-                            max_date_allowed=DATE_MAX,
-                            start_date=DATE_MIN,
-                            end_date=DATE_MAX,
-                            display_format="YYYY-MM-DD",
-                            style={"fontFamily": "Space Mono"},
-                        ),
-                    ],
+                    "Using the global date range from the top bar.",
+                    className="global-filter-note global-filter-note-inline",
                 ),
                 html.Div(
                     [
@@ -181,7 +182,8 @@ layout = html.Div(
             className="chart-grid chart-grid-1",
         ),
     ],
-    style={"maxWidth": "1600px"},
+        style={"maxWidth": "1600px"},
+    ),
 )
 
 
@@ -189,46 +191,71 @@ layout = html.Div(
 @callback(
     Output("geo-map", "figure"),
     Output("geo-cities-table", "children"),
+    Output("geography-page-context", "data"),
     Input("geo-metric", "value"),
-    Input("geo-date-range", "start_date"),
-    Input("geo-date-range", "end_date"),
+    Input("global-date-range", "start_date"),
+    Input("global-date-range", "end_date"),
+    Input("global-compare-toggle", "value"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def update_geography(metric, start_date, end_date):
-    dff = (
-        filter_by_date(df_master, start_date, end_date)
+def update_geography(metric, start_date, end_date, compare_values, theme="dark", applied_theme="dark"):
+    theme = applied_theme or theme or "dark"
+    palette = get_chart_theme(theme)
+    state_dff = (
+        filter_by_date_column(state_daily_df, "order_date", start_date, end_date)
         if start_date and end_date
-        else df_master.copy()
+        else state_daily_df.copy()
+    )
+    city_dff = (
+        filter_by_date_column(city_daily_df, "order_date", start_date, end_date)
+        if start_date and end_date
+        else city_daily_df.copy()
     )
     # Aggregate per state
     if metric == "revenue":
         state_agg = (
-            dff.groupby("customer_state")["total_order_value"]
+            state_dff.groupby("customer_state")["revenue_sum"]
             .sum()
             .reset_index()
-            .rename(columns={"total_order_value": "value"})
+            .rename(columns={"revenue_sum": "value"})
         )
         label_fmt = lambda v: format_brl(v)
         color_label = "Revenue (R$)"
     elif metric == "orders":
         state_agg = (
-            dff.groupby("customer_state")["order_id"]
-            .nunique()
+            state_dff.groupby("customer_state")["order_count"]
+            .sum()
             .reset_index()
-            .rename(columns={"order_id": "value"})
+            .rename(columns={"order_count": "value"})
         )
         label_fmt = lambda v: f"{int(v):,}"
         color_label = "Order Count"
     else:  # avg_rating
         state_agg = (
-            dff.groupby("customer_state")["review_score"]
-            .mean()
-            .reset_index()
-            .rename(columns={"review_score": "value"})
+            state_dff.groupby("customer_state", as_index=False)
+            .agg(review_sum=("review_sum", "sum"), review_count=("review_count", "sum"))
+            .assign(value=lambda df: df["review_sum"] / df["review_count"].clip(lower=1))
         )
         label_fmt = lambda v: f"{v:.2f} ★"
         color_label = "Avg Rating"
 
     geojson = _get_geojson()
+    choropleth_scale = (
+        [
+            [0.0, "#E0F2FE"],
+            [0.35, "#7DD3FC"],
+            [0.7, "#38BDF8"],
+            [1.0, "#2563EB"],
+        ]
+        if theme == "light"
+        else [
+            [0.0, "#1E2433"],
+            [0.5, "#7C3AED"],
+            [1.0, "#00D4FF"],
+        ]
+    )
+    state_border_color = "#E2E8F0" if theme == "light" else "#0D0F14"
 
     # ── Choropleth map ────────────────────────────────────────────────────────
     if geojson:
@@ -238,18 +265,15 @@ def update_geography(metric, start_date, end_date):
                 locations=state_agg["customer_state"],
                 z=state_agg["value"],
                 featureidkey="properties.sigla",
-                colorscale=[
-                    [0.0, "#1E2433"],
-                    [0.5, "#7C3AED"],
-                    [1.0, "#00D4FF"],
-                ],
-                marker_line_color="#0D0F14",
-                marker_line_width=0.5,
+                colorscale=choropleth_scale,
+                marker_line_color=state_border_color,
+                marker_line_width=0.8 if theme == "light" else 0.5,
                 colorbar=dict(
-                    title=dict(text=color_label, font=dict(color="#64748B", size=11)),
-                    tickfont=dict(color="#64748B", family="Space Mono"),
-                    bgcolor="rgba(0,0,0,0)",
-                    outlinewidth=0,
+                    title=dict(text=color_label, font=dict(color=palette["tick_color"], size=11)),
+                    tickfont=dict(color=palette["tick_color"], family="Space Mono"),
+                    bgcolor="rgba(255,255,255,0.78)" if theme == "light" else "rgba(0,0,0,0)",
+                    outlinewidth=1 if theme == "light" else 0,
+                    outlinecolor="rgba(203, 213, 225, 0.9)" if theme == "light" else "rgba(0,0,0,0)",
                     thickness=14,
                 ),
                 hovertemplate="<b>%{location}</b><br>"
@@ -261,6 +285,7 @@ def update_geography(metric, start_date, end_date):
             fitbounds="locations",
             visible=False,
             bgcolor="rgba(0,0,0,0)",
+            showlakes=False,
         )
     else:
         # Fallback bar chart when GeoJSON is unavailable
@@ -270,11 +295,11 @@ def update_geography(metric, start_date, end_date):
                 x=sorted_agg["value"],
                 y=sorted_agg["customer_state"],
                 orientation="h",
-                marker=dict(color="#7C3AED"),
+                marker=dict(color=palette["colorway"][0]),
             )
         )
 
-    apply_chart_layout(fig, height=520)
+    apply_chart_layout(fig, height=520, theme=theme)
     fig.update_layout(
         geo=dict(bgcolor="rgba(0,0,0,0)"),
         margin=dict(l=0, r=0, t=10, b=10),
@@ -283,24 +308,23 @@ def update_geography(metric, start_date, end_date):
     # ── Top 10 Cities table ───────────────────────────────────────────────────
     if metric == "revenue":
         city_agg = (
-            dff.groupby(["customer_city", "customer_state"])["total_order_value"]
+            city_dff.groupby(["customer_city", "customer_state"])["revenue_sum"]
             .sum()
             .reset_index()
-            .rename(columns={"total_order_value": "value"})
+            .rename(columns={"revenue_sum": "value"})
         )
     elif metric == "orders":
         city_agg = (
-            dff.groupby(["customer_city", "customer_state"])["order_id"]
-            .nunique()
+            city_dff.groupby(["customer_city", "customer_state"])["order_count"]
+            .sum()
             .reset_index()
-            .rename(columns={"order_id": "value"})
+            .rename(columns={"order_count": "value"})
         )
     else:
         city_agg = (
-            dff.groupby(["customer_city", "customer_state"])["review_score"]
-            .mean()
-            .reset_index()
-            .rename(columns={"review_score": "value"})
+            city_dff.groupby(["customer_city", "customer_state"], as_index=False)
+            .agg(review_sum=("review_sum", "sum"), review_count=("review_count", "sum"))
+            .assign(value=lambda df: df["review_sum"] / df["review_count"].clip(lower=1))
         )
 
     top10 = city_agg.nlargest(10, "value").reset_index(drop=True)
@@ -337,4 +361,18 @@ def update_geography(metric, start_date, end_date):
         className="data-table",
     )
 
-    return fig, html.Div(table, className="data-table-wrap")
+    context = {
+        "page": "geography",
+        "filters": {
+            "metric": metric,
+            "start_date": start_date,
+            "end_date": end_date,
+            "compare_previous": "compare" in (compare_values or []),
+        },
+        "headline_metrics": {
+            "top_state": state_agg.nlargest(1, "value").to_dict(orient="records"),
+            "top_cities": top10.head(3).to_dict(orient="records"),
+        },
+    }
+
+    return fig, html.Div(table, className="data-table-wrap"), context

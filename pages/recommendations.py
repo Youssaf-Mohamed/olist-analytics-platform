@@ -7,15 +7,17 @@ import dash
 from dash import html, dcc, callback, Input, Output, State
 from dash_iconify import DashIconify
 
-from utils.data_loader import load_master_data, get_unique_categories
+from components.page_helpers import page_section
+from utils.data_loader import get_unique_categories, load_data_bundle
 from utils.recommender import get_content_recommendations, get_trending_products
 from utils.cleaner import format_brl, tooltip
 
 dash.register_page(__name__, path="/recommendations", name="Recommendations", order=3)
 
 # ── Load data once ────────────────────────────────────────────────────────────
-df_master = load_master_data()
-CATEGORIES = get_unique_categories(df_master)
+DATA_BUNDLE = load_data_bundle()
+order_items_df = DATA_BUNDLE["order_items"]
+CATEGORIES = get_unique_categories(order_items_df)
 
 
 # ── Card builder ──────────────────────────────────────────────────────────────
@@ -111,7 +113,8 @@ def _empty_state(msg="No products found for the selected filters.") -> html.Div:
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         html.Div(
             [
@@ -157,11 +160,11 @@ layout = html.Div(
                                 step=10,
                                 value=[0, 500],
                                 marks={
-                                    0: {"label": "0", "style": {"color": "#E2E8F0"}}, 
-                                    250: {"label": "250", "style": {"color": "#E2E8F0"}}, 
-                                    500: {"label": "500", "style": {"color": "#E2E8F0"}}, 
-                                    750: {"label": "750", "style": {"color": "#E2E8F0"}}, 
-                                    1000: {"label": "1K", "style": {"color": "#E2E8F0"}}
+                                    0: {"label": "0", "style": {"color": "var(--text-soft)"}},
+                                    250: {"label": "250", "style": {"color": "var(--text-soft)"}},
+                                    500: {"label": "500", "style": {"color": "var(--text-soft)"}},
+                                    750: {"label": "750", "style": {"color": "var(--text-soft)"}},
+                                    1000: {"label": "1K", "style": {"color": "var(--text-soft)"}}
                                 },
                                 tooltip={"placement": "bottom", "always_visible": False},
                             ),
@@ -261,7 +264,8 @@ layout = html.Div(
         ),
         html.Div(id="rec-trending-grid", className="rec-grid"),
     ],
-    style={"maxWidth": "1600px"},
+        style={"maxWidth": "1600px"},
+    ),
 )
 
 
@@ -293,10 +297,24 @@ def get_recommendations(n_clicks, category, price_range):
 
 @callback(
     Output("rec-trending-grid", "children"),
+    Output("recommendations-page-context", "data"),
     Input("rec-category", "value"),  # any input to trigger on load
 )
 def load_trending(_):
     results = get_trending_products(days=90, top_n=5)
     if not results:
-        return _empty_state("No trending data available.")
-    return [_rec_card(r, "amber") for r in results]
+        context = {
+            "page": "recommendations",
+            "filters": {"category": _},
+            "headline_metrics": {"trending_count": 0},
+        }
+        return _empty_state("No trending data available."), context
+    context = {
+        "page": "recommendations",
+        "filters": {"category": _},
+        "headline_metrics": {
+            "trending_count": len(results),
+            "top_trending_product": results[0]["product_id"][:16] if results else "N/A",
+        },
+    }
+    return [_rec_card(r, "amber") for r in results], context

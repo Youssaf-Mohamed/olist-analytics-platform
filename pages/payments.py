@@ -8,18 +8,34 @@ from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go
 from dash_iconify import DashIconify
 
-from utils.data_loader import load_master_data
-from utils.cleaner import apply_chart_layout, filter_by_date, format_brl, pct, tooltip
+from components.page_helpers import page_section
+from utils.data_loader import load_data_bundle
+from utils.cleaner import (
+    apply_chart_layout,
+    filter_by_date,
+    filter_by_date_column,
+    format_brl,
+    get_chart_theme,
+    pct,
+    tooltip,
+)
 
 dash.register_page(__name__, path="/payments", name="Payments & Delivery", order=4)
 
 # ── Load data once ────────────────────────────────────────────────────────────
-df_master = load_master_data()
-DATE_MIN = df_master["order_purchase_timestamp"].min().date()
-DATE_MAX = df_master["order_purchase_timestamp"].max().date()
+DATA_BUNDLE = load_data_bundle()
+orders_df = DATA_BUNDLE["orders"]
+payments_df = DATA_BUNDLE["payments"]
+payments_daily_df = DATA_BUNDLE["agg_payments_daily"]
+delivery_state_daily_df = DATA_BUNDLE["agg_delivery_state_daily"]
+cancellations_daily_df = DATA_BUNDLE["agg_cancellations_daily"]
+scatter_sample_df = DATA_BUNDLE["agg_scatter_orders_sample"]
+DATE_MIN = orders_df["order_purchase_timestamp"].min().date()
+DATE_MAX = orders_df["order_purchase_timestamp"].max().date()
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         html.Div(
             [
@@ -31,21 +47,9 @@ layout = html.Div(
             ],
             className="page-header",
         ),
-        # Date filter
         html.Div(
-            [
-                html.Span("Date Range:", className="filter-label"),
-                dcc.DatePickerRange(
-                    id="pay-date-range",
-                    min_date_allowed=DATE_MIN,
-                    max_date_allowed=DATE_MAX,
-                    start_date=DATE_MIN,
-                    end_date=DATE_MAX,
-                    display_format="YYYY-MM-DD",
-                    style={"fontFamily": "Space Mono"},
-                ),
-            ],
-            className="filter-bar",
+            "This page follows the global date range in the top bar for synchronized payment and delivery analysis.",
+            className="global-filter-note",
         ),
         # 2 KPI cards
         html.Div(
@@ -247,8 +251,13 @@ layout = html.Div(
                             "Proportion of each payment method",
                             className="chart-subtitle",
                         ),
-                        dcc.Graph(
-                            id="pay-chart-types", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="pay-chart-types", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -269,8 +278,13 @@ layout = html.Div(
                             "Top 15 states — sorted ascending",
                             className="chart-subtitle",
                         ),
-                        dcc.Graph(
-                            id="pay-chart-states", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="pay-chart-states", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -297,8 +311,13 @@ layout = html.Div(
                             "Scatter plot — color = review score  |  sample of 5,000 orders",
                             className="chart-subtitle",
                         ),
-                        dcc.Graph(
-                            id="pay-chart-scatter", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="pay-chart-scatter", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -341,7 +360,8 @@ layout = html.Div(
             style={"marginTop": "20px"},
         ),
     ],
-    style={"maxWidth": "1600px"},
+        style={"maxWidth": "1600px"},
+    ),
 )
 
 
@@ -356,20 +376,47 @@ layout = html.Div(
     Output("pay-chart-states", "figure"),
     Output("pay-chart-scatter", "figure"),
     Output("pay-chart-cancellations", "figure"),
-    Input("pay-date-range", "start_date"),
-    Input("pay-date-range", "end_date"),
+    Output("payments-page-context", "data"),
+    Input("global-date-range", "start_date"),
+    Input("global-date-range", "end_date"),
+    Input("global-compare-toggle", "value"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def update_payments(start_date, end_date):
+def update_payments(start_date, end_date, compare_values, theme="dark", applied_theme="dark"):
+    theme = applied_theme or theme or "dark"
+    palette = get_chart_theme(theme)
     dff = (
-        filter_by_date(df_master, start_date, end_date)
+        filter_by_date(orders_df, start_date, end_date)
         if start_date and end_date
-        else df_master.copy()
+        else orders_df.copy()
+    )
+    payments_dff = (
+        filter_by_date_column(payments_daily_df, "order_date", start_date, end_date)
+        if start_date and end_date
+        else payments_daily_df.copy()
+    )
+    delivered_dff = dff[dff["order_status"] == "delivered"].copy()
+    delivery_state_dff = (
+        filter_by_date_column(delivery_state_daily_df, "order_date", start_date, end_date)
+        if start_date and end_date
+        else delivery_state_daily_df.copy()
+    )
+    cancel_dff = (
+        filter_by_date_column(cancellations_daily_df, "order_date", start_date, end_date)
+        if start_date and end_date
+        else cancellations_daily_df.copy()
+    )
+    scatter_df = (
+        filter_by_date(scatter_sample_df, start_date, end_date)
+        if start_date and end_date
+        else scatter_sample_df.copy()
     )
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
-    on_time_rate = dff["is_on_time"].mean()
-    avg_days = dff["delivery_days"].mean()
-    total_pay = dff["payment_value"].sum()
+    on_time_rate = delivered_dff["is_on_time"].mean()
+    avg_days = delivered_dff["delivery_days"].mean()
+    total_pay = payments_dff["payment_value_sum"].sum()
     avg_install = dff["payment_installments"].mean()
     cancel_rate = len(dff[dff["order_status"] == "canceled"]) / max(len(dff["order_id"].unique()), 1)
 
@@ -381,18 +428,18 @@ def update_payments(start_date, end_date):
             return f"R$ {v/1e3:.1f}K"
         return f"R$ {v:,.0f}"
 
-    kpi_ontime = pct(on_time_rate)
-    kpi_days = f"{avg_days:.1f} days"
+    kpi_ontime = pct(on_time_rate) if on_time_rate == on_time_rate else "N/A"
+    kpi_days = f"{avg_days:.1f} days" if avg_days == avg_days else "N/A"
     kpi_volume = _brl(total_pay)
     kpi_install = f"{avg_install:.1f}×"
     kpi_cancel = pct(cancel_rate)
 
     # ── Payment type donut ────────────────────────────────────────────────────
     pay_counts = (
-        dff.groupby("payment_type")["payment_value"]
+        payments_dff.groupby("payment_type")["payment_value_sum"]
         .sum()
         .reset_index()
-        .rename(columns={"payment_value": "value"})
+        .rename(columns={"payment_value_sum": "value"})
         .sort_values("value", ascending=False)
     )
     COLORS = ["#00D4FF", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#06B6D4"]
@@ -410,12 +457,19 @@ def update_payments(start_date, end_date):
             hovertemplate="<b>%{label}</b><br>R$ %{value:,.0f} (%{percent})<extra></extra>",
         )
     )
-    apply_chart_layout(fig_types, height=320)
+    apply_chart_layout(fig_types, height=320, theme=theme)
 
     # ── Delivery days by state ────────────────────────────────────────────────
     state_days = (
-        dff.groupby("customer_state")["delivery_days"]
-        .mean()
+        delivery_state_dff.groupby("customer_state", as_index=False)
+        .agg(
+            delivery_days_sum=("delivery_days_sum", "sum"),
+            delivered_count=("delivered_count", "sum"),
+        )
+        .assign(
+            delivery_days=lambda df: df["delivery_days_sum"]
+            / df["delivered_count"].clip(lower=1)
+        )
         .reset_index()
         .sort_values("delivery_days")
         .head(15)
@@ -433,14 +487,10 @@ def update_payments(start_date, end_date):
             hovertemplate="<b>%{y}</b><br>Avg %{x:.1f} days<extra></extra>",
         )
     )
-    apply_chart_layout(fig_states, height=320)
+    apply_chart_layout(fig_states, height=320, theme=theme)
     fig_states.update_layout(xaxis_title="Days")
 
     # ── Scatter: Order Value vs Delivery Days ─────────────────────────────────
-    scatter_df = dff.dropna(subset=["total_order_value", "delivery_days"]).copy()
-    if len(scatter_df) > 5_000:
-        scatter_df = scatter_df.sample(5_000, random_state=42)
-
     fig_scatter = go.Figure(
         go.Scatter(
             x=scatter_df["total_order_value"],
@@ -459,9 +509,10 @@ def update_payments(start_date, end_date):
                 opacity=0.6,
                 colorbar=dict(
                     title=dict(
-                        text="Review Score", font=dict(color="#64748B", size=11)
+                        text="Review Score",
+                        font=dict(color=palette["tick_color"], size=11),
                     ),
-                    tickfont=dict(color="#64748B", family="Space Mono"),
+                    tickfont=dict(color=palette["tick_color"], family="Space Mono"),
                     bgcolor="rgba(0,0,0,0)",
                     outlinewidth=0,
                     thickness=12,
@@ -476,19 +527,19 @@ def update_payments(start_date, end_date):
             ),
         )
     )
-    apply_chart_layout(fig_scatter, height=360)
+    apply_chart_layout(fig_scatter, height=360, theme=theme)
     fig_scatter.update_layout(
         xaxis_title="Order Value (R$)",
         yaxis_title="Delivery Days",
     )
 
     # ── Cancellations Over Time ──────────────────────────────────────────────
-    colds_df = dff[dff["order_status"] == "canceled"]
     cancel_monthly = (
-        colds_df.groupby("month_year")["order_id"]
-        .nunique()
+        cancel_dff.assign(month=cancel_dff["order_date"].dt.to_period("M").astype(str))
+        .groupby("month")["canceled_orders"]
+        .sum()
         .reset_index()
-        .rename(columns={"order_id": "cancellations", "month_year": "month"})
+        .rename(columns={"canceled_orders": "cancellations"})
         .sort_values("month")
     )
     if not cancel_monthly.empty:
@@ -502,11 +553,25 @@ def update_payments(start_date, end_date):
         )
     else:
         fig_cancel = go.Figure()
-    apply_chart_layout(fig_cancel, height=300)
+    apply_chart_layout(fig_cancel, height=300, theme=theme)
     fig_cancel.update_layout(
         xaxis=dict(tickangle=-45),
         yaxis=dict(title="Canceled Orders"),
     )
+
+    context = {
+        "page": "payments",
+        "filters": {
+            "start_date": start_date,
+            "end_date": end_date,
+            "compare_previous": "compare" in (compare_values or []),
+        },
+        "headline_metrics": {
+            "payment_volume": _brl(total_pay),
+            "on_time_rate": kpi_ontime,
+            "cancel_rate": kpi_cancel,
+        },
+    }
 
     return (
         kpi_ontime,
@@ -518,4 +583,5 @@ def update_payments(start_date, end_date):
         fig_states,
         fig_scatter,
         fig_cancel,
+        context,
     )

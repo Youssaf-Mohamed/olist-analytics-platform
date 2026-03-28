@@ -12,7 +12,8 @@ import plotly.graph_objects as go
 import pandas as pd
 from dash_iconify import DashIconify
 
-from utils.data_loader import load_master_data, get_unique_categories
+from components.page_helpers import chart_loading, page_section
+from utils.data_loader import get_unique_categories, load_data_bundle
 from utils.cleaner import apply_chart_layout, filter_by_date, tooltip
 
 try:
@@ -29,10 +30,12 @@ except ImportError:
 dash.register_page(__name__, path="/reviews", name="Reviews", order=2)
 
 # ── Load data once ────────────────────────────────────────────────────────────
-df_master = load_master_data()
-DATE_MIN = df_master["order_purchase_timestamp"].min().date()
-DATE_MAX = df_master["order_purchase_timestamp"].max().date()
-CATEGORIES = ["All Categories"] + get_unique_categories(df_master)
+DATA_BUNDLE = load_data_bundle()
+orders_df = DATA_BUNDLE["orders"]
+order_items_df = DATA_BUNDLE["order_items"]
+DATE_MIN = orders_df["order_purchase_timestamp"].min().date()
+DATE_MAX = orders_df["order_purchase_timestamp"].max().date()
+CATEGORIES = ["All Categories"] + get_unique_categories(order_items_df)
 
 
 def _make_wordcloud(comments: pd.Series) -> str | None:
@@ -67,7 +70,8 @@ def _make_wordcloud(comments: pd.Series) -> str | None:
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-layout = html.Div(
+layout = page_section(
+    html.Div(
     [
         html.Div(
             [
@@ -83,18 +87,8 @@ layout = html.Div(
         html.Div(
             [
                 html.Div(
-                    [
-                        html.Span("Date Range:", className="filter-label"),
-                        dcc.DatePickerRange(
-                            id="reviews-date-range",
-                            min_date_allowed=DATE_MIN,
-                            max_date_allowed=DATE_MAX,
-                            start_date=DATE_MIN,
-                            end_date=DATE_MAX,
-                            display_format="YYYY-MM-DD",
-                            style={"fontFamily": "Space Mono"},
-                        ),
-                    ],
+                    "Using the global date range from the top bar.",
+                    className="global-filter-note global-filter-note-inline",
                 ),
                 html.Div(
                     [
@@ -131,11 +125,8 @@ layout = html.Div(
                         html.P(
                             "Sentiment gauge (1–5 scale)", className="chart-subtitle"
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(id="reviews-gauge", config={"displayModeBar": False}),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -155,13 +146,10 @@ layout = html.Div(
                         html.P(
                             "Histogram of review scores", className="chart-subtitle"
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(
                                 id="reviews-histogram", config={"displayModeBar": False}
                             ),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -188,13 +176,10 @@ layout = html.Div(
                             "Top 10 categories — score spread",
                             className="chart-subtitle",
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             dcc.Graph(
                                 id="reviews-boxplot", config={"displayModeBar": False}
                             ),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -221,11 +206,8 @@ layout = html.Div(
                             "Generated from review_comment_message (Portuguese text)",
                             className="chart-subtitle",
                         ),
-                        dcc.Loading(
+                        chart_loading(
                             html.Div(id="reviews-wordcloud-wrap"),
-                            type="circle",
-                            color="#38BDF8",
-                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -234,7 +216,8 @@ layout = html.Div(
             className="chart-grid chart-grid-1",
         ),
     ],
-    style={"maxWidth": "1600px"},
+        style={"maxWidth": "1600px"},
+    ),
 )
 
 
@@ -244,18 +227,34 @@ layout = html.Div(
     Output("reviews-histogram", "figure"),
     Output("reviews-boxplot", "figure"),
     Output("reviews-wordcloud-wrap", "children"),
+    Output("reviews-page-context", "data"),
     Input("reviews-category", "value"),
-    Input("reviews-date-range", "start_date"),
-    Input("reviews-date-range", "end_date"),
+    Input("global-date-range", "start_date"),
+    Input("global-date-range", "end_date"),
+    Input("global-compare-toggle", "value"),
+    Input("theme-store", "data"),
+    Input("app-container", "data-theme"),
 )
-def update_reviews(category, start_date, end_date):
-    dff = (
-        filter_by_date(df_master, start_date, end_date)
+def update_reviews(category, start_date, end_date, compare_values, theme="dark", applied_theme="dark"):
+    theme = applied_theme or theme or "dark"
+    orders_dff = (
+        filter_by_date(orders_df, start_date, end_date)
         if start_date and end_date
-        else df_master.copy()
+        else orders_df.copy()
     )
+    items_dff = (
+        filter_by_date(order_items_df, start_date, end_date)
+        if start_date and end_date
+        else order_items_df.copy()
+    )
+    category_reviews = items_dff.drop_duplicates(["order_id", "product_category_name_english"])
+
     if category and category != "All Categories":
-        dff = dff[dff["product_category_name_english"] == category]
+        dff = category_reviews[
+            category_reviews["product_category_name_english"] == category
+        ].copy()
+    else:
+        dff = orders_dff.drop_duplicates("order_id").copy()
 
     avg_score = dff["review_score"].mean() if not dff.empty else 3.0
 
@@ -288,7 +287,7 @@ def update_reviews(category, start_date, end_date):
             ),
         )
     )
-    apply_chart_layout(fig_gauge, height=280)
+    apply_chart_layout(fig_gauge, height=280, theme=theme)
 
     # ── Histogram ─────────────────────────────────────────────────────────────
     score_counts = dff["review_score"].round().value_counts().sort_index()
@@ -306,7 +305,7 @@ def update_reviews(category, start_date, end_date):
                 hovertemplate=f"Score {score}: {cnt:,}<extra></extra>",
             )
         )
-    apply_chart_layout(fig_hist, height=280)
+    apply_chart_layout(fig_hist, height=280, theme=theme)
     fig_hist.update_layout(
         barmode="group",
         showlegend=True,
@@ -315,13 +314,18 @@ def update_reviews(category, start_date, end_date):
     )
 
     # ── Box Plot (Top 10 categories) ──────────────────────────────────────────
-    top_cats = (
-        df_master.groupby("product_category_name_english")["order_id"]
-        .nunique()
-        .nlargest(10)
-        .index.tolist()
-    )
-    box_df = df_master[df_master["product_category_name_english"].isin(top_cats)]
+    if category and category != "All Categories":
+        top_cats = [category]
+    else:
+        top_cats = (
+            category_reviews.groupby("product_category_name_english")["order_id"]
+            .nunique()
+            .nlargest(10)
+            .index.tolist()
+        )
+    box_df = category_reviews[
+        category_reviews["product_category_name_english"].isin(top_cats)
+    ]
     fig_box = go.Figure()
     colors_box = [
         "#00D4FF",
@@ -349,7 +353,7 @@ def update_reviews(category, start_date, end_date):
                 hovertemplate="<b>%{x}</b><br>Score: %{y:.1f}<extra></extra>",
             )
         )
-    apply_chart_layout(fig_box, height=340)
+    apply_chart_layout(fig_box, height=340, theme=theme)
     fig_box.update_layout(showlegend=False)
 
     # ── WordCloud ─────────────────────────────────────────────────────────────
@@ -391,4 +395,18 @@ def update_reviews(category, start_date, end_date):
             },
         )
 
-    return fig_gauge, fig_hist, fig_box, wc_content
+    context = {
+        "page": "reviews",
+        "filters": {
+            "category": category,
+            "start_date": start_date,
+            "end_date": end_date,
+            "compare_previous": "compare" in (compare_values or []),
+        },
+        "headline_metrics": {
+            "avg_review_score": f"{avg_score:.2f}",
+            "reviewed_orders": int(dff["order_id"].nunique()) if not dff.empty else 0,
+        },
+    }
+
+    return fig_gauge, fig_hist, fig_box, wc_content, context

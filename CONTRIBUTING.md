@@ -1,62 +1,154 @@
-# Contributing to OLIST BI 🚀
+# Contributing To OLIST BI
 
-Welcome to the **OLIST BI Analytics Platform**! We're thrilled to have you onboard. This guide outlines the workflow and architecture rules to help keep the codebase clean, professional, and easy to maintain as our team grows.
+This guide reflects the current architecture after the analytics, theme, loading, AI, and refactoring updates.
 
-## 🏗️ Project Architecture Overview
+## Project Architecture
 
-The system is built on **Plotly Dash** and **Python**. We follow a strong modular structure to keep the main application file clean.
+The project is organized into clear layers:
 
-### Directory Structure
-- **`/assets/`**: Contains all static files (CSS, images, fonts). Important: We use a custom, dark-theme Glassmorphism CSS system separated into multiple files (`01_base.css`, `02_layout.css`, etc.). **Do not use inline CSS** unless making dynamic color changes (e.g., in graphs or dynamic KPI logic).
-- **`/pages/`**: Every major dashboard view (Sales, Geography, Recommendations, Segmentation) lives here as an independent file.
-- **`/utils/`**: Shared Python utilities (`data_loader.py` for reading datasets, `cleaner.py` for formatting, etc.).
-- **`app.py`**: The main entry point. **Do not put complex business logic or layout inside `app.py`.** It should only handle routing, the main layout wrapper (sidebar/topbar), and server initialization.
+- `assets/`: theme variables, layout styling, component styling, overrides, responsive utilities
+- `components/`: shared app shell, AI panel, and reusable page helpers
+- `pages/`: page-specific layouts and callbacks
+- `utils/`: data loading, formatting, ML, retention, AI helpers
+- `tests/`: regression tests for analytics and callback outputs
+- `app.py`: application bootstrap and high-level callback wiring
+
+## Core Rules
+
+### 1. Keep `app.py` focused
+
+`app.py` should stay focused on:
+
+- Dash initialization
+- top-level stores
+- high-level callbacks
+- theme synchronization
+- root app wiring
+
+Do not move large page-specific business logic into `app.py`.
+
+### 2. Use the correct data grain
+
+Prefer `load_data_bundle()` and choose the proper dataset:
+
+- `orders` for order-level KPIs
+- `order_items` for category and item analysis
+- `payments` for payment-type analysis
+- `seller_orders` for seller analytics
+
+Do not reintroduce old shortcuts like "first product", "first seller", or "first payment type" into analytics logic.
+
+### 3. Reuse shared UI helpers
+
+Before adding repeated layout markup, check:
+
+- `components/shell.py`
+- `components/ai_panel.py`
+- `components/page_helpers.py`
+
+Use shared wrappers for page loading and chart loading instead of duplicating the same Dash structure across pages.
+
+### 4. Respect both themes
+
+Every visual change must work in:
+
+- `dark` mode
+- `light` mode
+
+Rules:
+
+- use CSS variables from `assets/01_base.css`
+- avoid hardcoded dark-only text or overlay colors
+- verify charts, tables, badges, loaders, and hover labels in both themes
+- if a chart uses custom colors, explicitly review the light-mode version
+
+### 5. Keep AI context structured
+
+When a page returns AI context, keep the payload structured as:
+
+- `page`
+- `filters`
+- `headline_metrics`
+
+This keeps the AI Analyst predictable and useful.
 
 ---
 
-## 🔧 Development Workflow
+## Page Implementation Pattern
 
-### 1. Branching Strategy
-We use a feature-branch workflow. **NEVER push directly to the `main` branch.**
+Each page should ideally follow this shape:
 
-- **Feature Work:** `feature/your-feature-name` (e.g., `feature/add-revenue-chart`)
-- **Bug Fixes:** `bugfix/issue-name` (e.g., `bugfix/dropdown-z-index`)
-- **Refactoring:** `refactor/component-name` (e.g., `refactor/clean-css`)
+1. register the page
+2. load shared data once at module level
+3. build a readable layout
+4. use shared wrappers for loading states
+5. keep callbacks grouped and readable
+6. return page context when needed
 
-### 2. Making Changes
-1. Checkout the latest `main` branch.
-2. Create your branch: `git checkout -b feature/your-name`
-3. Write your code following the **Style Guidelines** below.
-4. Commit often, with clear, descriptive commit messages.
-
-### 3. Creating a Pull Request (PR)
-When your feature is complete:
-1. Push your branch to GitHub.
-2. Open a Pull Request targeting the `main` branch.
-3. Provide a clear description of:
-   - What you added/changed.
-   - Any new dependencies added to `requirements.txt`.
-   - Screenshots if you altered the UI.
-4. Request a review from the Lead Developer/Admin.
+If a callback gets too large, split chart construction into local helper functions.
 
 ---
 
-## 🎨 Style & UI Guidelines
+## Styling Guidelines
 
-### Python (Backend)
-- Follow **PEP 8** formatting guidelines.
-- Use explicit variable names (e.g., `total_revenue` instead of `tr`).
-- Document complex functions using docstrings.
+### Python
 
-### CSS (Frontend)
-- **Avoid `!important` tags.** If a component isn't styling correctly, verify CSS specificity (e.g., use `#parent-id .child-class` instead of `.child-class !important`). Dash injects default inline styles, so use high-specificity selectors.
-- Use the **CSS Variables** defined in `assets/01_base.css` (e.g., `var(--cyan)`, `var(--input-bg)`) rather than hardcoding hex colors. This ensures theme consistency.
+- follow PEP 8
+- prefer explicit variable names
+- keep callbacks readable
+- document non-trivial helpers with short docstrings
 
-### Dash Components
-- We are migrating towards **Dash 4.x** standards.
-- Ensure all inputs and filters use our custom `.filter-bar` and dark theme wrapper classes overrides.
+### CSS
+
+- prefer CSS variables over hardcoded hex values
+- avoid unnecessary inline styling
+- update both theme variants when changing components with strong visual identity
+
+### Tables
+
+- keep table typography readable
+- prefer shared `.data-table` styles for HTML tables
+- if you use `go.Table`, make sure header, cell colors, and font sizes are theme-aware
 
 ---
 
-## 🤝 Getting Help
-If you get stuck on an issue, or you don’t understand how the Gemeni AI Integration in `utils/gemini_analyst.py` is caching data, please reach out to the project Lead or open an issue on GitHub.
+## Testing Requirements
+
+Before finalizing meaningful work, run:
+
+```bash
+python -m unittest tests.test_data_integrity test_dashboard_callbacks -v
+```
+
+At minimum, verify:
+
+- imports still work
+- page callbacks return valid shapes
+- analytics logic still respects the corrected data model
+- UI changes remain readable in both light and dark mode
+
+---
+
+## Pull Request Checklist
+
+Include in your PR:
+
+- what changed
+- why it changed
+- whether analytics behavior changed
+- screenshots for UI changes
+- any dependency or environment changes
+- confirmation that tests passed
+
+---
+
+## Getting Help
+
+If you are unsure about:
+
+- which dataset grain to use
+- where a shared helper should live
+- how to keep a visual change theme-safe
+- how AI context is assembled
+
+ask early before adding duplicated or misleading logic.

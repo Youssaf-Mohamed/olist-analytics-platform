@@ -42,7 +42,7 @@
 /* ── RESPONSIVE ── */
 @media (max-width: 1280px) {
     .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
     .chart-grid-3 {
@@ -55,6 +55,28 @@
 }
 
 @media (max-width: 960px) {
+    #topbar {
+        position: static;
+    }
+
+    #main-content {
+        margin-right: 0 !important;
+    }
+
+    .global-topbar-shell {
+        flex-direction: column;
+    }
+
+    .topbar-controls {
+        justify-content: stretch;
+    }
+
+    .topbar-control,
+    .topbar-control-compact {
+        width: 100%;
+        min-width: 0;
+    }
+
     #sidebar {
         width: var(--sidebar-collapsed) !important;
         min-width: var(--sidebar-collapsed) !important;
@@ -81,12 +103,18 @@
     }
 
     .kpi-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
     .chart-grid-3,
     .chart-grid-2 {
         grid-template-columns: 1fr;
+    }
+
+    .ai-panel {
+        width: min(100vw, 420px);
+        min-width: 0;
+        max-width: 100vw;
     }
 
     .rec-grid {
@@ -96,7 +124,7 @@
 
 @media (max-width: 600px) {
     .kpi-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
     }
 
     .rec-grid {
@@ -105,5 +133,49 @@
 
     #main-content {
         padding: 14px 10px;
+    }
+
+    .chat-quick-actions {
+        padding-top: 12px;
+    }
+
+    .chat-action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 740px) {
+    .kpi-card {
+        padding: 22px 18px;
+        min-height: 150px;
+    }
+
+    .kpi-label {
+        font-size: 0.8rem;
+    }
+
+    .kpi-value {
+        font-size: 1.9rem;
+    }
+
+    .kpi-delta {
+        font-size: 0.88rem;
+    }
+
+    .tooltip-text {
+        width: min(240px, 78vw);
+        left: 0;
+        bottom: calc(100% + 10px);
+        transform: translateX(0) translateY(10px) scale(0.95);
+    }
+
+    .tooltip-container:hover .tooltip-text {
+        transform: translateX(0) translateY(0) scale(1);
+    }
+
+    .tooltip-text::after {
+        left: 18px;
+        margin-left: 0;
     }
 }

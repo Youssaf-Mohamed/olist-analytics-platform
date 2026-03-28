@@ -1,12 +1,14 @@
 """
-utils/gemini_analyst.py — AI Chatbot powered by Gemini
-Provides data-aware chat responses about the Olist dashboard.
+AI chatbot helpers for the dashboard.
 """
 
+from __future__ import annotations
+
 import os
+from typing import Any
+
 import pandas as pd
 
-# ── Gemini client setup ───────────────────────────────────────────────────────
 _GEMINI_AVAILABLE = False
 _client = None
 _MODEL_NAME = "gemini-2.0-flash"
@@ -18,129 +20,168 @@ try:
     if _api_key:
         _client = genai.Client(api_key=_api_key)
         _GEMINI_AVAILABLE = True
-        print("[gemini] ✓ Gemini API ready.")
+        print("[gemini] Gemini API ready.")
     else:
-        print("[gemini] GEMINI_API_KEY not set — using rule-based responses.")
+        print("[gemini] GEMINI_API_KEY not set, using rule-based responses.")
 except ImportError:
-    print("[gemini] google-genai not installed — using rule-based responses.")
+    print("[gemini] google-genai not installed, using rule-based responses.")
 
 
-SYSTEM_PROMPT = """You are an AI data analyst embedded in the Olist E-Commerce BI Dashboard.
-You answer questions about the business data provided below. Keep responses concise (2-4 sentences).
-Use numbers from the data. If you don't know the answer from the data, say so.
-Always respond in the same language the user writes in. Use emojis sparingly for key points.
-Format currency as R$ (Brazilian Real)."""
+SYSTEM_PROMPT = """You are an AI data analyst embedded in the Olist BI dashboard.
+You answer questions using the provided dataset summary and the currently active page context.
+Keep responses concise and grounded in the given numbers.
+If the active page context is present, prioritize it over the dataset-wide summary.
+Always answer in the same language as the user."""
 
 
-def build_data_summary(df: pd.DataFrame) -> str:
-    """Build a concise text summary of the master DataFrame for context."""
-    total_rev = df["payment_value"].sum()
-    total_orders = df["order_id"].nunique()
-    total_customers = df["customer_unique_id"].nunique()
-    date_min = df["order_purchase_timestamp"].min().strftime("%Y-%m-%d")
-    date_max = df["order_purchase_timestamp"].max().strftime("%Y-%m-%d")
+def _as_bundle(data: Any) -> dict[str, pd.DataFrame]:
+    if isinstance(data, dict):
+        return data
+    return {"orders": data}
 
-    # Top 5 categories
-    cat_rev = (
-        df.groupby("product_category_name_english")["payment_value"]
-        .sum()
-        .sort_values(ascending=False)
-    )
-    top5_cats = ", ".join(
-        [f"{c} (R${v:,.0f})" for c, v in cat_rev.head(5).items()]
-    )
 
-    # Top 5 states
-    state_orders = df["customer_state"].value_counts().head(5)
+def build_data_summary(data: Any) -> str:
+    bundle = _as_bundle(data)
+    orders_df = bundle["orders"]
+    items_df = bundle.get("order_items")
+    payments_df = bundle.get("payments")
+
+    total_rev = orders_df["total_order_value"].sum()
+    total_orders = orders_df["order_id"].nunique()
+    total_customers = orders_df["customer_unique_id"].nunique()
+    date_min = orders_df["order_purchase_timestamp"].min().strftime("%Y-%m-%d")
+    date_max = orders_df["order_purchase_timestamp"].max().strftime("%Y-%m-%d")
+
+    if items_df is not None:
+        cat_rev = (
+            items_df.groupby("product_category_name_english")["line_total"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        top5_cats = ", ".join(
+            [f"{category} (R${value:,.0f})" for category, value in cat_rev.head(5).items()]
+        )
+    else:
+        top5_cats = "Category data unavailable"
+
+    state_orders = orders_df["customer_state"].value_counts().head(5)
     top5_states = ", ".join(
-        [f"{s} ({c:,} orders)" for s, c in state_orders.items()]
+        [f"{state} ({count:,} orders)" for state, count in state_orders.items()]
     )
 
-    # Reviews
-    avg_review = df["review_score"].mean()
-    review_dist = df["review_score"].value_counts().sort_index()
-    review_str = ", ".join([f"{k}★: {v:,}" for k, v in review_dist.items()])
+    avg_review = orders_df["review_score"].mean()
+    review_dist = orders_df["review_score"].dropna().value_counts().sort_index()
+    review_str = ", ".join([f"{score}*: {count:,}" for score, count in review_dist.items()])
 
-    # Delivery
-    on_time = df["is_on_time"].mean() * 100 if "is_on_time" in df.columns else 0
-    avg_delivery = df["delivery_days"].mean() if "delivery_days" in df.columns else 0
+    delivered = orders_df[orders_df["order_status"] == "delivered"]
+    on_time = delivered["is_on_time"].mean() * 100 if not delivered.empty else 0
+    avg_delivery = delivered["delivery_days"].mean() if not delivered.empty else 0
 
-    # Payment methods
-    pay_types = df["payment_type"].value_counts()
-    pay_str = ", ".join([f"{t}: {c:,}" for t, c in pay_types.head(4).items()])
+    if payments_df is not None:
+        pay_types = (
+            payments_df.groupby("payment_type")["payment_value"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        pay_str = ", ".join([f"{ptype}: R${value:,.0f}" for ptype, value in pay_types.head(4).items()])
+    else:
+        pay_str = "Payment data unavailable"
 
-    # Monthly trend (last 6 months)
     monthly = (
-        df.set_index("order_purchase_timestamp")
-        .resample("ME")["payment_value"]
+        orders_df.set_index("order_purchase_timestamp")
+        .resample("ME")["total_order_value"]
         .sum()
         .tail(6)
     )
     trend_str = ", ".join(
-        [f"{d.strftime('%Y-%m')}: R${v:,.0f}" for d, v in monthly.items()]
+        [f"{date.strftime('%Y-%m')}: R${value:,.0f}" for date, value in monthly.items()]
     )
 
-    return f"""OLIST E-COMMERCE DATA SUMMARY:
-Period: {date_min} to {date_max}
-Total Revenue: R${total_rev:,.0f} | Orders: {total_orders:,} | Customers: {total_customers:,}
-Top Categories: {top5_cats}
-Top States: {top5_states}
-Reviews: avg {avg_review:.1f}/5.0 — {review_str}
-Delivery: {on_time:.1f}% on-time, avg {avg_delivery:.1f} days
-Payments: {pay_str}
-Monthly Revenue (last 6m): {trend_str}"""
+    return (
+        "OLIST E-COMMERCE DATA SUMMARY:\n"
+        f"Period: {date_min} to {date_max}\n"
+        f"Total Revenue: R${total_rev:,.0f} | Orders: {total_orders:,} | Customers: {total_customers:,}\n"
+        f"Top Categories: {top5_cats}\n"
+        f"Top States: {top5_states}\n"
+        f"Reviews: avg {avg_review:.1f}/5.0 - {review_str}\n"
+        f"Delivery: {on_time:.1f}% on-time, avg {avg_delivery:.1f} days\n"
+        f"Payments: {pay_str}\n"
+        f"Monthly Revenue (last 6m): {trend_str}"
+    )
 
 
-def chat_with_data(user_message: str, data_summary: str, history: list) -> str:
-    """Send user message with data context to Gemini."""
+def _format_page_context(page_context: dict[str, Any] | None) -> str:
+    if not page_context:
+        return "Active page context: not available."
+
+    page_name = page_context.get("page", "unknown")
+    filters = page_context.get("filters", {})
+    metrics = page_context.get("headline_metrics", {})
+    return (
+        f"Active page: {page_name}\n"
+        f"Filters: {filters}\n"
+        f"Visible headline metrics: {metrics}"
+    )
+
+
+def chat_with_data(
+    user_message: str,
+    data_summary: str,
+    history: list[dict[str, str]],
+    page_context: dict[str, Any] | None = None,
+) -> str:
+    page_summary = _format_page_context(page_context)
+
     if not _GEMINI_AVAILABLE or _client is None:
-        return _fallback_chat(user_message, data_summary)
+        return _fallback_chat(user_message, data_summary, page_summary)
 
-    # Build conversation contents
     contents = [
-        {"role": "user", "parts": [{"text": f"{SYSTEM_PROMPT}\n\n{data_summary}"}]},
-        {"role": "model", "parts": [{"text": "Understood. I'm ready to answer questions about the Olist dashboard data."}]},
+        {
+            "role": "user",
+            "parts": [{"text": f"{SYSTEM_PROMPT}\n\n{data_summary}\n\n{page_summary}"}],
+        },
+        {
+            "role": "model",
+            "parts": [
+                {
+                    "text": "Understood. I will answer using the dataset summary and the active dashboard context."
+                }
+            ],
+        },
     ]
 
-    # Add conversation history
-    for msg in history:
-        contents.append({
-            "role": "user" if msg["role"] == "user" else "model",
-            "parts": [{"text": msg["content"]}],
-        })
+    for message in history:
+        contents.append(
+            {
+                "role": "user" if message["role"] == "user" else "model",
+                "parts": [{"text": message["content"]}],
+            }
+        )
 
-    # Add current message
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
     try:
-        response = _client.models.generate_content(
-            model=_MODEL_NAME,
-            contents=contents,
-        )
+        response = _client.models.generate_content(model=_MODEL_NAME, contents=contents)
         return response.text
-    except Exception as e:
-        print(f"[gemini] API error: {e}")
-        return _fallback_chat(user_message, data_summary, api_configured=True)
+    except Exception as exc:
+        print(f"[gemini] API error: {exc}")
+        return _fallback_chat(user_message, data_summary, page_summary, api_configured=True)
 
 
-def _fallback_chat(user_message: str, data_summary: str, api_configured: bool = False) -> str:
-    """Simple keyword-based responses when Gemini is unavailable."""
-    msg = user_message.lower()
+def _fallback_chat(
+    user_message: str,
+    data_summary: str,
+    page_summary: str,
+    api_configured: bool = False,
+) -> str:
+    message = user_message.lower()
+    response_parts = []
 
-    # Handle greetings
-    if any(w in msg for w in ["hello", "hi", "hey", "مرحبا", "اهلا", "أهلا", "سلام"]):
-        if api_configured:
-            return (
-                "👋 Hi! I hit a temporary rate limit. Try again in a few seconds!\n\n"
-                "In the meantime, ask me about: revenue, categories, states, reviews, delivery, or payments."
-            )
-        return (
-            "👋 Hi! I'm running in basic mode right now.\n\n"
-            "Ask me about: revenue, categories, states, reviews, delivery, or payments."
-        )
+    if "Active page:" in page_summary and "not available" not in page_summary:
+        response_parts.append(page_summary)
 
     lines = data_summary.split("\n")
-    summary_dict = {}
+    summary_dict: dict[str, str] = {}
     for line in lines:
         if "Total Revenue" in line:
             summary_dict["revenue_line"] = line.strip()
@@ -155,21 +196,84 @@ def _fallback_chat(user_message: str, data_summary: str, api_configured: bool = 
         elif "Payments" in line:
             summary_dict["payments_line"] = line.strip()
 
-    if any(w in msg for w in ["revenue", "sales", "إيراد", "مبيعات", "ايراد"]):
-        return f"📊 {summary_dict.get('revenue_line', 'Revenue data not available.')}"
-    elif any(w in msg for w in ["category", "categories", "product", "كاتيجوري", "منتج"]):
-        return f"🏷️ {summary_dict.get('categories_line', 'Category data not available.')}"
-    elif any(w in msg for w in ["state", "region", "geo", "ولاية", "منطقة"]):
-        return f"📍 {summary_dict.get('states_line', 'State data not available.')}"
-    elif any(w in msg for w in ["review", "rating", "satisfaction", "تقييم"]):
-        return f"⭐ {summary_dict.get('reviews_line', 'Review data not available.')}"
-    elif any(w in msg for w in ["delivery", "shipping", "توصيل", "شحن"]):
-        return f"🚚 {summary_dict.get('delivery_line', 'Delivery data not available.')}"
-    elif any(w in msg for w in ["payment", "pay", "دفع"]):
-        return f"💳 {summary_dict.get('payments_line', 'Payment data not available.')}"
-    else:
-        hint = "\n⏳ Gemini rate-limited — try again shortly!" if api_configured else ""
+    if any(word in message for word in ["hello", "hi", "hey", "مرحبا", "اهلا", "أهلا", "سلام"]):
+        if api_configured:
+            return (
+                "Hi! I hit a temporary rate limit. Try again in a few seconds.\n\n"
+                "I can still help with revenue, categories, states, reviews, delivery, or payments."
+            )
         return (
-            "🤖 I can answer questions about: revenue, categories, states, "
-            f"reviews, delivery, and payments. Try asking about one of these!{hint}"
+            "Hi! I am running in basic mode right now.\n\n"
+            "Ask me about revenue, categories, states, reviews, delivery, or payments."
         )
+
+    if any(word in message for word in ["revenue", "sales", "إيراد", "مبيعات", "ايراد"]):
+        response_parts.append(summary_dict.get("revenue_line", "Revenue data not available."))
+    elif any(word in message for word in ["category", "categories", "product", "كاتيجوري", "منتج"]):
+        response_parts.append(summary_dict.get("categories_line", "Category data not available."))
+    elif any(word in message for word in ["state", "region", "geo", "ولاية", "منطقة"]):
+        response_parts.append(summary_dict.get("states_line", "State data not available."))
+    elif any(word in message for word in ["review", "rating", "satisfaction", "تقييم"]):
+        response_parts.append(summary_dict.get("reviews_line", "Review data not available."))
+    elif any(word in message for word in ["delivery", "shipping", "توصيل", "شحن"]):
+        response_parts.append(summary_dict.get("delivery_line", "Delivery data not available."))
+    elif any(word in message for word in ["payment", "pay", "دفع"]):
+        response_parts.append(summary_dict.get("payments_line", "Payment data not available."))
+    else:
+        hint = "\nGemini is temporarily unavailable." if api_configured else ""
+        response_parts.append(
+            "I can answer questions about revenue, categories, states, reviews, delivery, and payments."
+            + hint
+        )
+
+    return "\n".join(response_parts)
+
+
+def generate_executive_summary(
+    data_summary: str, page_context: dict[str, Any] | None = None
+) -> str:
+    page_summary = _format_page_context(page_context)
+    prompt = (
+        "Write a short executive summary for a business stakeholder. "
+        "Use 4 compact bullet points covering current scope, strongest signal, risk/opportunity, and next action.\n\n"
+        f"{data_summary}\n\n{page_summary}"
+    )
+
+    if _GEMINI_AVAILABLE and _client is not None:
+        try:
+            response = _client.models.generate_content(
+                model=_MODEL_NAME,
+                contents=[
+                    {"role": "user", "parts": [{"text": f"{SYSTEM_PROMPT}\n\n{prompt}"}]}
+                ],
+            )
+            return response.text
+        except Exception as exc:
+            print(f"[gemini] Executive summary fallback due to error: {exc}")
+
+    page_name = page_context.get("page", "dashboard") if page_context else "dashboard"
+    filters = page_context.get("filters", {}) if page_context else {}
+    metrics = page_context.get("headline_metrics", {}) if page_context else {}
+
+    metric_lines = []
+    for key, value in list(metrics.items())[:4]:
+        metric_lines.append(f"- {key.replace('_', ' ').title()}: {value}")
+
+    filter_line = (
+        f"Period: {filters.get('start_date', 'full range')} to {filters.get('end_date', 'full range')}"
+    )
+    compare_line = (
+        "Previous-period comparison is enabled."
+        if filters.get("compare_previous")
+        else "Previous-period comparison is disabled."
+    )
+
+    return "\n".join(
+        [
+            f"Executive summary for {page_name.title()}",
+            f"- Scope: {filter_line}",
+            f"- Current view: {compare_line}",
+            *(metric_lines or ["- Metrics: No page-specific metrics were available."]),
+            "- Action: Review the strongest metric on this page and investigate any weak retention, delivery, or satisfaction signal before the next reporting cycle.",
+        ]
+    )

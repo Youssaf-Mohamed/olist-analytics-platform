@@ -29,9 +29,17 @@ archive
 .agents/
 .cortex/
 brain/
+PROJECT_MEMORY.md
 *prompt*
 *prompts*
 *.md.bak
+
+# Local Logs and Runtime Artifacts
+*.log
+error.txt
+error_log.txt
+server_stdout.txt
+server_stdout.log
 
 # IDE & OS
 .vscode/

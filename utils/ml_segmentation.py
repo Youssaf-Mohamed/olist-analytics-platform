@@ -39,8 +39,10 @@ def compute_rfm(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns columns: customer_unique_id, recency, frequency, monetary
     """
+    delivered_df = df[df["order_status"] == "delivered"].copy()
+
     rfm = (
-        df.dropna(
+        delivered_df.dropna(
             subset=[
                 "customer_unique_id",
                 "order_purchase_timestamp",
@@ -85,7 +87,8 @@ def cluster_customers(rfm_df: pd.DataFrame, n_clusters: int = 4) -> pd.DataFrame
     labels = km.fit_predict(X_scaled)
     rfm["segment_id"] = labels
 
-    sil_score = silhouette_score(X_scaled, labels, sample_size=5000, random_state=42)
+    sample_size = min(5000, len(rfm))
+    sil_score = silhouette_score(X_scaled, labels, sample_size=sample_size, random_state=42)
     db_score = davies_bouldin_score(X_scaled, labels)
 
     # ── Label clusters by RFM profile ─────────────────────────────────────────
