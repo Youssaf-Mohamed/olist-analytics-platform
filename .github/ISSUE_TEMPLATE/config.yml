@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Project Documentation
+    url: https://github.com/Youssaf-Mohamed/olist-analytics-platform#readme
+    about: Review setup, usage, and architecture details before opening an issue.

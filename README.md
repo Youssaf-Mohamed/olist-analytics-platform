@@ -1,62 +1,95 @@
 <h1 align="center">
-  <img src="assets/logo.svg" alt="Olist BI Logo" width="120" />
+  <img src="assets/logo.svg" alt="Olist BI Logo" width="128" />
   <br>
   OLIST BI Analytics Platform
 </h1>
 
 <p align="center">
-  <strong>A polished Dash analytics platform for Olist marketplace data, with synchronized filters, dual-theme UI, tested analytics, and a context-aware AI copilot.</strong>
+  <strong>A polished Dash business intelligence platform for Olist marketplace data, combining trustworthy analytics, AI-assisted insights, and a premium dual-theme dashboard experience.</strong>
+</p>
+
+<p align="center">
+  <a href="#overview">Overview</a> •
+  <a href="#features">Features</a> •
+  <a href="#screenshots">Screenshots</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#testing">Testing</a>
 </p>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-yellow.svg">
   <img alt="Dash" src="https://img.shields.io/badge/Dash-Plotly-blue.svg">
+  <img alt="UI" src="https://img.shields.io/badge/UI-Light%20%2F%20Dark-0ea5e9.svg">
   <img alt="Tests" src="https://img.shields.io/badge/Tests-Unittest-success.svg">
-  <img alt="Themes" src="https://img.shields.io/badge/UI-Light%20%2F%20Dark-0ea5e9.svg">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-black.svg">
 </p>
 
 ---
 
 ## Overview
 
-**OLIST BI** is a multi-page business intelligence dashboard built in Python with Dash and Plotly. It turns the Olist e-commerce datasets into an interactive analytics workspace covering executive KPIs, geography, reviews, recommendations, payments, segmentation, cohorts, forecasting, and seller performance.
+**OLIST BI** is a multi-page analytics dashboard built with Python, Dash, Plotly, and machine learning utilities for the Brazilian Olist marketplace dataset.
 
-The current version is centered around:
+It is designed to feel like a modern decision-support workspace rather than a collection of disconnected charts. The platform combines:
 
-- trustworthy analytics on the correct data grain
-- a premium dual-theme interface with improved transitions
-- a context-aware AI analyst panel
-- automated regression coverage for core analytics behavior
+- corrected and trustworthy analytics on the proper data grain
+- synchronized filtering across pages
+- premium light and dark themes
+- context-aware AI guidance
+- regression-tested dashboard behavior
+
+---
+
+## Features
+
+- **Executive overview** with revenue, order trends, AOV, review score, and delivery signals.
+- **Geographic analytics** with Brazil state choropleth and city-level breakdowns.
+- **Review intelligence** including sentiment-oriented scoring visuals, distributions, and text summaries.
+- **Recommendations** for product discovery and trend-based suggestions.
+- **Payments and operations** analysis covering payment behavior, shipping timing, and fulfillment patterns.
+- **Customer segmentation** using RFM-style features and clustering outputs.
+- **Cohort retention** tracking for delivered orders across customer lifecycle periods.
+- **Forecasting** with backtest-aware evaluation instead of misleading train-only metrics.
+- **Seller analytics** for delivery, satisfaction, and regional performance benchmarking.
+- **AI Analyst panel** with quick actions, page-aware context, and fallback responses when Gemini is unavailable.
 
 ---
 
 ## Recent Improvements
 
-- **Corrected analytics grain**: the app now uses a cached multi-grain analytics bundle instead of collapsing multi-item orders into misleading first-item summaries.
-- **Fixed date filtering**: the selected end date now includes the full final day.
-- **Improved delivery KPIs**: on-time metrics are based on delivered orders instead of mixing in undelivered orders.
-- **Context-aware AI Analyst**: the AI panel now reads the active page, filters, and headline metrics before answering.
-- **Professional AI panel UI**: richer header, quick actions, live context card, better chat layout, and improved theme handling.
-- **Stable theme transitions**: light and dark mode are applied early to reduce dark flashes during navigation and loading.
-- **Cleaner loading experience**: page-level loading shells replaced the older fragmented per-chart loading feel.
-- **Improved geography styling**: Brazil state choropleth now has a cleaner light-theme palette and clearer borders.
-- **Larger readable tables**: table font sizes, spacing, and badges were increased across the dashboard.
-- **Refactored structure**: shared shell and page helpers now live in `components/`.
+- Fixed end-date filtering so the selected last day is fully included.
+- Corrected misleading multi-item and multi-payment aggregation behavior.
+- Improved delivery KPI accuracy by evaluating on-time rates on delivered orders.
+- Refactored shared layout logic into `components/`.
+- Redesigned the AI panel to feel more like a premium dashboard copilot.
+- Reduced dark-theme flashes during navigation with early theme hydration.
+- Improved loading experience with cleaner page-level transitions.
+- Enhanced light-mode readability, table sizing, and map styling.
+- Added regression tests for dashboard callbacks and analytics assumptions.
 
 ---
 
-## Core Features
+## Screenshots
 
-- **Executive analytics**: revenue, orders, AOV, review score, delivery speed, and growth tracking.
-- **Geographic intelligence**: Brazil state choropleth plus ranked city tables.
-- **Customer sentiment**: review gauge, histogram, box plot, and word cloud.
-- **Recommendations**: category-aware product suggestions and trending items.
-- **Payments and delivery**: payment mix, delivery behavior, cancellations, and operational signals.
-- **Customer segmentation**: RFM + K-Means clustering with actionable segment summaries.
-- **Cohort retention**: delivered-order retention heatmaps and lifecycle signals.
-- **Forecasting**: time-series forecasting with holdout backtest metrics.
-- **Seller analytics**: seller leaderboard, state distribution, delivery performance, and satisfaction benchmarking.
-- **AI dashboard copilot**: executive summaries, smart prompts, and context-aware answers with Gemini or local fallback mode.
+Add screenshots here for a stronger GitHub presentation. Recommended captures:
+
+- `Overview` dashboard
+- `Geography` choropleth in light mode
+- `AI Analyst` panel
+- `Forecasting` page
+- `Sellers` page
+
+Example structure:
+
+```text
+docs/screenshots/overview.png
+docs/screenshots/geography-light.png
+docs/screenshots/ai-panel.png
+docs/screenshots/forecasting.png
+docs/screenshots/sellers.png
+```
+
+Then reference them in the README with standard markdown images.
 
 ---
 
@@ -64,7 +97,9 @@ The current version is centered around:
 
 ### Multi-grain analytics bundle
 
-The app now builds and caches a structured analytics bundle in `.cache/analytics_bundle.pkl`, including:
+The application builds and caches a structured analytics bundle in `.cache/analytics_bundle.pkl`. This keeps pages on the right analytical grain and avoids repeatedly rebuilding expensive joins and marts.
+
+Included views now cover:
 
 - `orders`
 - `order_items`
@@ -72,25 +107,23 @@ The app now builds and caches a structured analytics bundle in `.cache/analytics
 - `seller_orders`
 - pre-aggregated daily marts
 
-This keeps each page on the correct grain and reduces repeated expensive preprocessing.
-
 ### Shared UI shell
 
-Reusable layout and component helpers now live in:
+Reusable interface logic lives in:
 
 - `components/shell.py`
 - `components/ai_panel.py`
 - `components/page_helpers.py`
 
-This keeps page modules more focused and reduces repeated layout code.
+This reduces duplication and keeps page modules more focused.
 
-### Theme-aware experience
+### Theme-safe rendering
 
-The platform supports both `light` and `dark` mode using CSS variables and early theme hydration, including loaders and transitions.
+The dashboard supports both `light` and `dark` modes using CSS variables, early theme hydration, and chart-aware styling so transitions stay visually stable.
 
-### Regression-tested dashboard
+### Regression-tested behavior
 
-Core analytics behavior and callback outputs are covered by regression tests under `tests/` and `test_dashboard_callbacks.py`.
+Core analytics and callback outputs are covered by tests under `tests/` and `test_dashboard_callbacks.py`.
 
 ---
 
@@ -98,14 +131,13 @@ Core analytics behavior and callback outputs are covered by regression tests und
 
 | Domain | Technology |
 | :--- | :--- |
-| Frontend UI | Dash (Plotly) |
+| Frontend UI | Dash, Plotly |
 | Data Processing | Pandas, NumPy |
-| Charts | Plotly Graph Objects, Plotly Express |
-| Styling | Custom CSS variables and component styling |
 | Machine Learning | Scikit-Learn |
 | AI Assistant | Google GenAI SDK with fallback mode |
 | NLP | WordCloud |
 | Testing | Python `unittest` |
+| Styling | Custom CSS architecture |
 
 ---
 
@@ -114,23 +146,14 @@ Core analytics behavior and callback outputs are covered by regression tests und
 ```text
 Big Data & Analytic/
 |
-|-- assets/                    # Theme, layout, component styling, logo
-|-- components/                # Shared shell, AI panel, page helpers
+|-- assets/                    # Theme, layout, components, logo
+|-- components/                # Shared shell, AI panel, page wrappers
 |-- data/                      # Olist CSV datasets
 |-- pages/                     # Dashboard pages
-|   |-- overview.py
-|   |-- geography.py
-|   |-- reviews.py
-|   |-- recommendations.py
-|   |-- payments.py
-|   |-- segmentation.py
-|   |-- cohorts.py
-|   |-- forecasting.py
-|   `-- sellers.py
-|-- tests/                     # Data integrity and regression tests
-|-- utils/                     # Data loading, formatting, AI, ML, retention
-|-- app.py                     # Dash entry point and callbacks
-|-- requirements.txt
+|-- tests/                     # Regression tests
+|-- utils/                     # Data, AI, ML, retention helpers
+|-- app.py                     # Dash entry point
+|-- README.md
 |-- SETUP.md
 |-- CONTRIBUTING.md
 `-- run.md
@@ -138,7 +161,7 @@ Big Data & Analytic/
 
 ---
 
-## Running The App
+## Quick Start
 
 ```powershell
 cd "D:\programing\Graduation project\Big Data & Analytic"
@@ -151,44 +174,62 @@ Then open:
 http://127.0.0.1:8050/
 ```
 
+For full local setup, see [SETUP.md](SETUP.md).
+
 ---
 
-## AI Analyst Notes
+## AI Analyst
 
-- If `GEMINI_API_KEY` is available, the AI panel uses Gemini.
-- If the key is missing, the assistant still works in fallback mode.
-- The AI panel is context-aware and receives:
+- If `GEMINI_API_KEY` is set, the assistant uses Gemini.
+- If the key is missing, the panel still works in fallback mode.
+- The panel is context-aware and can consume:
   - active page
-  - visible headline metrics
-  - active filter summary
+  - active filters
+  - headline metrics
 
 ---
 
-## Running Tests
+## Testing
+
+Run:
 
 ```bash
 python -m unittest tests.test_data_integrity test_dashboard_callbacks -v
 ```
 
-Current regression coverage includes:
+Current coverage includes:
 
 - data integrity checks
 - callback output validation
 - review filtering behavior
 - forecasting context
-- cohort retention assumptions
+- retention assumptions
 - seller and payment payload checks
 
 ---
 
-## Documentation
+## Roadmap
 
-- [SETUP.md](SETUP.md): local setup and troubleshooting
-- [CONTRIBUTING.md](CONTRIBUTING.md): architecture and workflow rules
-- [run.md](run.md): quick local run commands
+- add report export workflows
+- expand screenshot and demo assets
+- introduce GitHub Actions quality gates
+- improve AI memory and guided analysis flows
+- support deployment-ready configuration
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture and contribution guidance.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
 <p align="center">
-  <i>Built for data-driven decisions and polished analytical storytelling.</i>
+  <i>Built for polished analytical storytelling and practical decision support.</i>
 </p>

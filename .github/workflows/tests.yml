@@ -1,0 +1,65 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check dataset availability
+        id: dataset_check
+        shell: bash
+        run: |
+          required_files=(
+            "data/olist_orders_dataset.csv"
+            "data/olist_order_items_dataset.csv"
+            "data/olist_customers_dataset.csv"
+            "data/olist_products_dataset.csv"
+            "data/olist_sellers_dataset.csv"
+            "data/olist_order_reviews_dataset.csv"
+            "data/olist_order_payments_dataset.csv"
+            "data/olist_geolocation_dataset.csv"
+            "data/product_category_name_translation.csv"
+          )
+
+          missing=0
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing dataset file: $file"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 0 ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests
+        if: steps.dataset_check.outputs.available == 'true'
+        run: |
+          python -m unittest tests.test_data_integrity test_dashboard_callbacks -v
+
+      - name: Skip note
+        if: steps.dataset_check.outputs.available != 'true'
+        run: |
+          echo "Dataset files are not stored in the repository, so dashboard regression tests were skipped."
