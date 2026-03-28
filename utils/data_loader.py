@@ -194,6 +194,8 @@ def load_master_data(force_reload: bool = False) -> pd.DataFrame:
     df["month_year"] = df["order_purchase_timestamp"].dt.strftime("%Y-%m")
     df["purchase_year"] = df["order_purchase_timestamp"].dt.year
     df["purchase_month"] = df["order_purchase_timestamp"].dt.month
+    df["purchase_dow"] = df["order_purchase_timestamp"].dt.day_name()
+    df["purchase_hour"] = df["order_purchase_timestamp"].dt.hour
 
     # Fill nulls
     df["review_score"] = df["review_score"].fillna(df["review_score"].median())

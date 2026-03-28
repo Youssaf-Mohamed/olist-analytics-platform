@@ -13,7 +13,7 @@ import pandas as pd
 from dash_iconify import DashIconify
 
 from utils.data_loader import load_master_data, get_unique_categories
-from utils.cleaner import apply_chart_layout, tooltip
+from utils.cleaner import apply_chart_layout, filter_by_date, tooltip
 
 try:
     from wordcloud import WordCloud
@@ -30,6 +30,8 @@ dash.register_page(__name__, path="/reviews", name="Reviews", order=2)
 
 # ── Load data once ────────────────────────────────────────────────────────────
 df_master = load_master_data()
+DATE_MIN = df_master["order_purchase_timestamp"].min().date()
+DATE_MAX = df_master["order_purchase_timestamp"].max().date()
 CATEGORIES = ["All Categories"] + get_unique_categories(df_master)
 
 
@@ -77,20 +79,39 @@ layout = html.Div(
             ],
             className="page-header",
         ),
-        # Category filter
+        # Filters
         html.Div(
             [
-                html.Span("Category:", className="filter-label"),
-                dcc.Dropdown(
-                    id="reviews-category",
-                    options=[{"label": c, "value": c} for c in CATEGORIES],
-                    value="All Categories",
-                    clearable=False,
-                    className="dash-dropdown",
-                    style={"minWidth": "300px"},
+                html.Div(
+                    [
+                        html.Span("Date Range:", className="filter-label"),
+                        dcc.DatePickerRange(
+                            id="reviews-date-range",
+                            min_date_allowed=DATE_MIN,
+                            max_date_allowed=DATE_MAX,
+                            start_date=DATE_MIN,
+                            end_date=DATE_MAX,
+                            display_format="YYYY-MM-DD",
+                            style={"fontFamily": "Space Mono"},
+                        ),
+                    ],
+                ),
+                html.Div(
+                    [
+                        html.Span("Category:", className="filter-label"),
+                        dcc.Dropdown(
+                            id="reviews-category",
+                            options=[{"label": c, "value": c} for c in CATEGORIES],
+                            value="All Categories",
+                            clearable=False,
+                            className="dash-dropdown",
+                            style={"minWidth": "300px"},
+                        ),
+                    ],
                 ),
             ],
             className="filter-bar",
+            style={"display": "flex", "flexWrap": "wrap", "gap": "24px", "alignItems": "flex-end"},
         ),
         # Gauge + Histogram
         html.Div(
@@ -110,7 +131,12 @@ layout = html.Div(
                         html.P(
                             "Sentiment gauge (1–5 scale)", className="chart-subtitle"
                         ),
-                        dcc.Graph(id="reviews-gauge", config={"displayModeBar": False}),
+                        dcc.Loading(
+                            dcc.Graph(id="reviews-gauge", config={"displayModeBar": False}),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
+                        ),
                     ],
                     className="chart-card",
                 ),
@@ -129,8 +155,13 @@ layout = html.Div(
                         html.P(
                             "Histogram of review scores", className="chart-subtitle"
                         ),
-                        dcc.Graph(
-                            id="reviews-histogram", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="reviews-histogram", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -157,8 +188,13 @@ layout = html.Div(
                             "Top 10 categories — score spread",
                             className="chart-subtitle",
                         ),
-                        dcc.Graph(
-                            id="reviews-boxplot", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="reviews-boxplot", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -185,7 +221,12 @@ layout = html.Div(
                             "Generated from review_comment_message (Portuguese text)",
                             className="chart-subtitle",
                         ),
-                        html.Div(id="reviews-wordcloud-wrap"),
+                        dcc.Loading(
+                            html.Div(id="reviews-wordcloud-wrap"),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
+                        ),
                     ],
                     className="chart-card",
                 ),
@@ -204,9 +245,15 @@ layout = html.Div(
     Output("reviews-boxplot", "figure"),
     Output("reviews-wordcloud-wrap", "children"),
     Input("reviews-category", "value"),
+    Input("reviews-date-range", "start_date"),
+    Input("reviews-date-range", "end_date"),
 )
-def update_reviews(category):
-    dff = df_master.copy()
+def update_reviews(category, start_date, end_date):
+    dff = (
+        filter_by_date(df_master, start_date, end_date)
+        if start_date and end_date
+        else df_master.copy()
+    )
     if category and category != "All Categories":
         dff = dff[dff["product_category_name_english"] == category]
 

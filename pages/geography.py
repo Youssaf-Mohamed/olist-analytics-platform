@@ -10,12 +10,14 @@ import requests
 from dash_iconify import DashIconify
 
 from utils.data_loader import load_master_data
-from utils.cleaner import apply_chart_layout, format_brl, tooltip
+from utils.cleaner import apply_chart_layout, filter_by_date, format_brl, tooltip
 
 dash.register_page(__name__, path="/geography", name="Geography", order=1)
 
 # ── Load data once ────────────────────────────────────────────────────────────
 df_master = load_master_data()
+DATE_MIN = df_master["order_purchase_timestamp"].min().date()
+DATE_MAX = df_master["order_purchase_timestamp"].max().date()
 
 # ── Brazil GeoJSON ────────────────────────────────────────────────────────────
 GEOJSON_URL = (
@@ -82,20 +84,39 @@ layout = html.Div(
             ],
             className="page-header",
         ),
-        # Metric selector
+        # Filters
         html.Div(
             [
-                html.Span("Metric:", className="filter-label"),
-                dcc.Dropdown(
-                    id="geo-metric",
-                    options=METRIC_OPTIONS,
-                    value="revenue",
-                    clearable=False,
-                    className="dash-dropdown",
-                    style={"minWidth": "240px"},
+                html.Div(
+                    [
+                        html.Span("Date Range:", className="filter-label"),
+                        dcc.DatePickerRange(
+                            id="geo-date-range",
+                            min_date_allowed=DATE_MIN,
+                            max_date_allowed=DATE_MAX,
+                            start_date=DATE_MIN,
+                            end_date=DATE_MAX,
+                            display_format="YYYY-MM-DD",
+                            style={"fontFamily": "Space Mono"},
+                        ),
+                    ],
+                ),
+                html.Div(
+                    [
+                        html.Span("Metric:", className="filter-label"),
+                        dcc.Dropdown(
+                            id="geo-metric",
+                            options=METRIC_OPTIONS,
+                            value="revenue",
+                            clearable=False,
+                            className="dash-dropdown",
+                            style={"minWidth": "240px"},
+                        ),
+                    ],
                 ),
             ],
             className="filter-bar",
+            style={"display": "flex", "flexWrap": "wrap", "gap": "24px", "alignItems": "flex-end"},
         ),
         # Map
         html.Div(
@@ -116,9 +137,14 @@ layout = html.Div(
                             "Color intensity reflects the selected metric per state.",
                             className="chart-subtitle",
                         ),
-                        dcc.Graph(
-                            id="geo-map",
-                            config={"displayModeBar": False, "scrollZoom": True},
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="geo-map",
+                                config={"displayModeBar": False, "scrollZoom": True},
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -142,7 +168,12 @@ layout = html.Div(
                             style={"display": "flex", "alignItems": "center"},
                         ),
                         html.P("Ranked by selected metric", className="chart-subtitle"),
-                        html.Div(id="geo-cities-table"),
+                        dcc.Loading(
+                            html.Div(id="geo-cities-table"),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
+                        ),
                     ],
                     className="chart-card",
                 ),
@@ -159,12 +190,19 @@ layout = html.Div(
     Output("geo-map", "figure"),
     Output("geo-cities-table", "children"),
     Input("geo-metric", "value"),
+    Input("geo-date-range", "start_date"),
+    Input("geo-date-range", "end_date"),
 )
-def update_geography(metric):
+def update_geography(metric, start_date, end_date):
+    dff = (
+        filter_by_date(df_master, start_date, end_date)
+        if start_date and end_date
+        else df_master.copy()
+    )
     # Aggregate per state
     if metric == "revenue":
         state_agg = (
-            df_master.groupby("customer_state")["total_order_value"]
+            dff.groupby("customer_state")["total_order_value"]
             .sum()
             .reset_index()
             .rename(columns={"total_order_value": "value"})
@@ -173,7 +211,7 @@ def update_geography(metric):
         color_label = "Revenue (R$)"
     elif metric == "orders":
         state_agg = (
-            df_master.groupby("customer_state")["order_id"]
+            dff.groupby("customer_state")["order_id"]
             .nunique()
             .reset_index()
             .rename(columns={"order_id": "value"})
@@ -182,7 +220,7 @@ def update_geography(metric):
         color_label = "Order Count"
     else:  # avg_rating
         state_agg = (
-            df_master.groupby("customer_state")["review_score"]
+            dff.groupby("customer_state")["review_score"]
             .mean()
             .reset_index()
             .rename(columns={"review_score": "value"})
@@ -245,21 +283,21 @@ def update_geography(metric):
     # ── Top 10 Cities table ───────────────────────────────────────────────────
     if metric == "revenue":
         city_agg = (
-            df_master.groupby(["customer_city", "customer_state"])["total_order_value"]
+            dff.groupby(["customer_city", "customer_state"])["total_order_value"]
             .sum()
             .reset_index()
             .rename(columns={"total_order_value": "value"})
         )
     elif metric == "orders":
         city_agg = (
-            df_master.groupby(["customer_city", "customer_state"])["order_id"]
+            dff.groupby(["customer_city", "customer_state"])["order_id"]
             .nunique()
             .reset_index()
             .rename(columns={"order_id": "value"})
         )
     else:
         city_agg = (
-            df_master.groupby(["customer_city", "customer_state"])["review_score"]
+            dff.groupby(["customer_city", "customer_state"])["review_score"]
             .mean()
             .reset_index()
             .rename(columns={"review_score": "value"})

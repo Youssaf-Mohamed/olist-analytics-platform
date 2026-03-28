@@ -27,12 +27,15 @@ The design philosophy relies strictly on **Dark Mode Glassmorphism** (custom Van
 
 ## 🚀 Key Features
 
-*   📊 **Executive Analytics:** High-level key performance indicators, tracking revenue, distinct customer counts, and order volumes over dynamic periods.
-*   🛒 **Smart Recommendations:** An algorithmic engine predicting optimal product subsets based on category, sub-category, price range parameters, and recent trending data.
-*   🗺️ **Geographic Heatmaps:** Interactive spatial insights identifying high-density delivery zones, regional delays, and localized revenue generation across Brazil.
-*   👥 **Customer Segmentation:** Integrated Machine Learning visualizations breaking down user behavior into defined tiers (e.g., Champions, At-Risk, Loyal) for targeted marketing.
-*   📈 **Time-Series Forecasting:** Predictive models mapped visually to anticipate order volumes and prepare infrastructure.
-*   🤖 **Integrated AI Analyst:** A conversational sidebar (powered by Google Gemini API) capable of parsing on-screen statistics and generating natural language summaries to answer complex business questions on the fly.
+*   📊 **Executive Analytics:** High-level KPIs with MoM growth indicators, tracking revenue, orders, AOV, satisfaction, and delivery performance over dynamic date ranges.
+*   🛒 **Smart Recommendations:** An algorithmic engine predicting optimal product subsets based on category, price range, and recent trending data.
+*   🗺️ **Geographic Heatmaps:** Interactive spatial insights identifying high-density delivery zones, regional delays, and localized revenue generation across Brazil — filterable by date and metric.
+*   👥 **Customer Segmentation:** Integrated Machine Learning visualizations (RFM + K-Means) breaking down user behavior into defined tiers (Champions, At-Risk, Loyal) for targeted marketing.
+*   📈 **Time-Series Forecasting:** Predictive models (Ridge regression + Fourier features) with confidence intervals to anticipate revenue trends.
+*   💬 **Customer Sentiment:** Review score analysis with gauge, histograms, box plots, and WordCloud generation — filterable by date and category.
+*   💳 **Payment & Delivery:** Comprehensive analysis of payment methods, delivery performance, and order value vs. delivery correlation — filterable by date.
+*   🏪 **Seller Analytics:** Seller performance leaderboard, geographic distribution, delivery speed analysis, and customer satisfaction benchmarking.
+*   🤖 **Integrated AI Analyst:** A conversational sidebar (powered by Google Gemini API) capable of parsing on-screen statistics and answering complex business questions.
 
 ---
 
@@ -44,7 +47,8 @@ The design philosophy relies strictly on **Dark Mode Glassmorphism** (custom Van
 | **Data Manipulation** | Pandas, NumPy |
 | **Visualizations** | Plotly GO, Plotly Express |
 | **Styling & Theming** | Custom Vanilla CSS (Glassmorphism, CSS Variables) |
-| **Machine Learning / AI** | Scikit-Learn (Segmentation/Forecasting), Google GenAI SDK |
+| **Machine Learning / AI** | Scikit-Learn (K-Means, Ridge Regression), Google GenAI SDK |
+| **NLP** | WordCloud |
 
 ---
 
@@ -59,24 +63,37 @@ olist-analytics-platform/
 │   ├── 03_components.css    # Custom UI elements (cards, AI panel)
 │   ├── 04_overrides.css     # Hard overrides for Dash core libraries
 │   ├── 05_utilities.css     # Responsive media queries, animations
+│   ├── fonts.css            # Google Fonts import
 │   └── logo.png             # Project Identity
 │
-├── data/
-│   ├── processed/           # Cleaned .csv / .parquet datasets
-│   └── raw/                 # Original source database dumps
+├── data/                    # Olist CSV datasets (~126 MB)
+│   ├── olist_orders_dataset.csv
+│   ├── olist_order_items_dataset.csv
+│   ├── olist_customers_dataset.csv
+│   ├── olist_products_dataset.csv
+│   ├── olist_sellers_dataset.csv
+│   ├── olist_order_reviews_dataset.csv
+│   ├── olist_order_payments_dataset.csv
+│   ├── olist_geolocation_dataset.csv
+│   └── product_category_name_translation.csv
 │
-├── pages/                   # Isolated dashboard views
-│   ├── geography.py
-│   ├── recommendations.py
-│   ├── reviews.py
-│   ├── sales_overview.py
-│   └── segmentation.py
+├── pages/                   # Isolated dashboard views (8 pages)
+│   ├── overview.py          # Page 1: Sales Overview + KPIs + MoM Growth
+│   ├── geography.py         # Page 2: Geographic Intelligence + Choropleth
+│   ├── reviews.py           # Page 3: Customer Sentiment + WordCloud
+│   ├── recommendations.py   # Page 4: Smart Recommendation Engine
+│   ├── payments.py          # Page 5: Payments & Delivery Analytics
+│   ├── segmentation.py      # Page 6: Customer Segmentation (ML)
+│   ├── forecasting.py       # Page 7: Sales Forecasting (ML)
+│   └── sellers.py           # Page 8: Seller Performance Analytics
 │
 ├── utils/                   # Shared business logic
-│   ├── cleaner.py           # Data formatting (currency, strings)
-│   ├── data_loader.py       # Caching & DataFrame loading protocols
-│   ├── gemini_analyst.py    # AI Integration module
-│   └── recommender.py       # Algorithmic suggestion logic
+│   ├── data_loader.py       # CSV loading, merge pipeline, pickle cache
+│   ├── cleaner.py           # Chart template, formatters, helpers
+│   ├── gemini_analyst.py    # Gemini AI Integration + fallback
+│   ├── recommender.py       # Content-based recommendation engine
+│   ├── ml_segmentation.py   # RFM + K-Means clustering
+│   └── ml_forecasting.py    # Ridge regression forecasting
 │
 ├── app.py                   # Main entry point & layout definition
 ├── requirements.txt         # Production dependencies

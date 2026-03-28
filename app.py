@@ -47,6 +47,7 @@ NAV_ITEMS = [
     },
     {"icon": "ph:users-three-bold", "label": "Segmentation", "href": "/segmentation"},
     {"icon": "ph:trend-up-bold", "label": "Forecasting", "href": "/forecasting"},
+    {"icon": "ph:storefront-bold", "label": "Sellers", "href": "/sellers"},
 ]
 
 

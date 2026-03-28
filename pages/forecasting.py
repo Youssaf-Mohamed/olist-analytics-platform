@@ -207,6 +207,40 @@ layout = html.Div(
                     ],
                     className="kpi-card kpi-amber",
                 ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.P(
+                                    [
+                                        "Model Accuracy",
+                                        tooltip(
+                                            "In-sample predictive accuracy. Focus on R² (closer to 1 is better) and MAPE (error %)."
+                                        ),
+                                    ],
+                                    className="kpi-label",
+                                    style={"display": "flex", "alignItems": "center"},
+                                ),
+                                DashIconify(
+                                    icon="ph:target-bold",
+                                    width=20,
+                                    style={
+                                        "color": "var(--cyan)",
+                                        "marginBottom": "8px",
+                                    },
+                                ),
+                            ],
+                            style={
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "alignItems": "flex-start",
+                            },
+                        ),
+                        html.Div(id="fc-kpi-acc", className="kpi-value", style={"fontSize": "1.3rem"}),
+                        html.P(id="fc-kpi-acc-info", className="kpi-delta", style={"fontSize": "0.75rem"}),
+                    ],
+                    className="kpi-card",
+                ),
             ],
             className="kpi-grid",
         ),
@@ -316,6 +350,8 @@ clientside_callback(
     Output("fc-kpi-peak", "children"),
     Output("fc-kpi-peak-val", "children"),
     Output("fc-kpi-daily", "children"),
+    Output("fc-kpi-acc", "children"),
+    Output("fc-kpi-acc-info", "children"),
     Output("fc-area-chart", "figure"),
     Output("fc-monthly-bar", "figure"),
     Input("fc-horizon-store", "data"),
@@ -330,6 +366,8 @@ def _update_forecast(horizon_days):
     peak_str = metrics["peak_month"]
     peak_val = format_brl(metrics["peak_month_value"])
     daily_str = format_brl(metrics["avg_daily"])
+    acc_str = f"R²: {metrics['r2_score']:.2f}"
+    acc_info = f"MAPE: {metrics['mape']*100:.1f}%, MAE: R$ {metrics['mae']:,.0f}"
 
     # ── Area chart ─────────────────────────────────────────────────────────────
     # Show only last 180 days of history for readability
@@ -460,4 +498,4 @@ def _update_forecast(horizon_days):
         legend=dict(orientation="h", y=1.06, x=0),
     )
 
-    return total_str, growth_str, peak_str, peak_val, daily_str, fig_area, fig_bar
+    return total_str, growth_str, peak_str, peak_val, daily_str, acc_str, acc_info, fig_area, fig_bar

@@ -196,6 +196,40 @@ layout = html.Div(
                     ],
                     className="kpi-card kpi-amber",
                 ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.P(
+                                    [
+                                        "Clustering Quality",
+                                        tooltip(
+                                            "Silhouette Score (closer to 1 is better) and Davies-Bouldin Index (lower is better)."
+                                        ),
+                                    ],
+                                    className="kpi-label",
+                                    style={"display": "flex", "alignItems": "center"},
+                                ),
+                                DashIconify(
+                                    icon="ph:chart-polar-bold",
+                                    width=20,
+                                    style={
+                                        "color": "var(--cyan)",
+                                        "marginBottom": "8px",
+                                    },
+                                ),
+                            ],
+                            style={
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "alignItems": "flex-start",
+                            },
+                        ),
+                        html.Div(id="seg-kpi-metrics", className="kpi-value", style={"fontSize": "1.3rem"}),
+                        html.P(id="seg-kpi-metrics-info", className="kpi-delta", style={"fontSize": "0.75rem"}),
+                    ],
+                    className="kpi-card",
+                ),
             ],
             className="kpi-grid",
         ),
@@ -298,8 +332,7 @@ layout = html.Div(
             className="chart-card",
             style={"marginBottom": "18px"},
         ),
-        # Store for clustered data
-        dcc.Store(id="seg-rfm-store"),
+        # Store for clustered data removed for performance
     ],
     className="page-content",
 )
@@ -307,55 +340,37 @@ layout = html.Div(
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 @callback(
-    Output("seg-rfm-store", "data"),
-    Input("seg-cluster-slider", "value"),
-)
-def _cluster(n_clusters):
-    rfm = cluster_customers(rfm_base, n_clusters=int(n_clusters))
-    return rfm[
-        [
-            "customer_unique_id",
-            "recency",
-            "frequency",
-            "monetary",
-            "segment",
-            "color",
-            "pc1",
-            "pc2",
-        ]
-    ].to_json(date_format="iso", orient="records")
-
-
-@callback(
     Output("seg-kpi-total", "children"),
     Output("seg-kpi-champions", "children"),
     Output("seg-kpi-atrisk", "children"),
     Output("seg-kpi-hibernating", "children"),
-    Input("seg-rfm-store", "data"),
+    Output("seg-kpi-metrics", "children"),
+    Output("seg-kpi-metrics-info", "children"),
+    Output("seg-scatter", "figure"),
+    Output("seg-donut", "figure"),
+    Output("seg-heatmap", "figure"),
+    Input("seg-cluster-slider", "value"),
 )
-def _update_kpis(data):
-    rfm = pd.read_json(StringIO(data), orient="records")
+def _update_segmentation(n_clusters):
+    # Cluster locally in memory without serialising huge JSON back to client
+    rfm, metrics = cluster_customers(rfm_base, n_clusters=int(n_clusters))
+    
+    # ── KPIs ──────────────────────────────────────────────────────────────────
     total = len(rfm)
     seg_counts = rfm["segment"].value_counts()
     champions = seg_counts.get("Champions", 0)
     at_risk = seg_counts.get("At Risk", 0)
     hibernating = seg_counts.get("Hibernating", 0)
-    return (
-        f"{total:,}",
-        f"{champions:,}",
-        f"{at_risk:,}",
-        f"{hibernating:,}",
-    )
-
-
-@callback(
-    Output("seg-scatter", "figure"),
-    Input("seg-rfm-store", "data"),
-)
-def _scatter(data):
-    rfm = pd.read_json(StringIO(data), orient="records")
-
-    fig = px.scatter(
+    
+    kpi_total = f"{total:,}"
+    kpi_champ = f"{champions:,}"
+    kpi_risk = f"{at_risk:,}"
+    kpi_hib = f"{hibernating:,}"
+    kpi_met_val = f"Sil: {metrics['silhouette']:.2f}"
+    kpi_met_info = f"DB: {metrics['davies_bouldin']:.2f}"
+    
+    # ── Scatter Plot ──────────────────────────────────────────────────────────
+    fig_scatter = px.scatter(
         rfm,
         x="pc1",
         y="pc2",
@@ -377,26 +392,20 @@ def _scatter(data):
         },
         opacity=0.72,
     )
-    fig.update_traces(marker=dict(size=5))
-    apply_chart_layout(fig, height=400)
-    fig.update_layout(
+    fig_scatter.update_traces(marker=dict(size=5))
+    apply_chart_layout(fig_scatter, height=400)
+    fig_scatter.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(11,14,23,0.4)",
         legend=dict(title="Segment"),
     )
-    return fig
-
-
-@callback(
-    Output("seg-donut", "figure"),
-    Input("seg-rfm-store", "data"),
-)
-def _donut(data):
-    rfm = pd.read_json(StringIO(data), orient="records")
+    
+    # Summary for Donut & Heatmap
     summary = get_segment_summary(rfm)
-
+    
+    # ── Donut Chart ───────────────────────────────────────────────────────────
     colors = [SEGMENT_COLORS.get(s, "#64748B") for s in summary["segment"]]
-    fig = go.Figure(
+    fig_donut = go.Figure(
         go.Pie(
             labels=summary["segment"],
             values=summary["count"],
@@ -406,7 +415,7 @@ def _donut(data):
             hovertemplate="<b>%{label}</b><br>Count: %{value:,}<br>%{percent}<extra></extra>",
         )
     )
-    fig.update_layout(
+    fig_donut.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
@@ -414,18 +423,9 @@ def _donut(data):
         height=400,
         font=dict(family="Inter, sans-serif", color="#E2E8F0", size=12),
     )
-    return fig
-
-
-@callback(
-    Output("seg-heatmap", "figure"),
-    Input("seg-rfm-store", "data"),
-)
-def _heatmap(data):
-    rfm = pd.read_json(StringIO(data), orient="records")
-    summary = get_segment_summary(rfm)
-
-    fig = go.Figure(
+    
+    # ── Heatmap/Table ─────────────────────────────────────────────────────────
+    fig_table = go.Figure(
         go.Table(
             header=dict(
                 values=[
@@ -435,6 +435,7 @@ def _heatmap(data):
                     "<b>Avg Recency (days)</b>",
                     "<b>Avg Orders</b>",
                     "<b>Avg Revenue (R$)</b>",
+                    "<b>Actionable Insight</b>",
                 ],
                 fill_color="#1A1F35",
                 font=dict(
@@ -452,6 +453,7 @@ def _heatmap(data):
                     summary["avg_recency"].apply(lambda v: f"{v:.0f}"),
                     summary["avg_frequency"].apply(lambda v: f"{v:.1f}"),
                     summary["avg_monetary"].apply(lambda v: f"R$ {v:,.0f}"),
+                    summary["insight"],
                 ],
                 fill_color=[["#13172A", "#0B0E17"] * len(summary)],
                 font=dict(color="#94A3B8", size=12, family="Inter, sans-serif"),
@@ -461,10 +463,21 @@ def _heatmap(data):
             ),
         )
     )
-    fig.update_layout(
+    fig_table.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=0, r=0, t=0, b=0),
         height=260,
         font=dict(family="Inter, sans-serif"),
     )
-    return fig
+
+    return (
+        kpi_total,
+        kpi_champ,
+        kpi_risk,
+        kpi_hib,
+        kpi_met_val,
+        kpi_met_info,
+        fig_scatter,
+        fig_donut,
+        fig_table,
+    )

@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score, mean_absolute_error, mean_absolute_percentage_error
 
 
 def build_time_series(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,6 +83,11 @@ def forecast_revenue(ts_df: pd.DataFrame, horizon_days: int = 90):
     y_pred_in = model.predict(X_scaled)
     residuals_std = np.std(y_hist - y_pred_in)
 
+    # Evaluation metrics
+    r2 = r2_score(y_hist, y_pred_in)
+    mae = mean_absolute_error(y_hist, y_pred_in)
+    mape = mean_absolute_percentage_error(y_hist, y_pred_in)
+
     # Future dates
     last_date = ts["date"].max()
     future_dates = pd.date_range(
@@ -143,6 +149,9 @@ def forecast_revenue(ts_df: pd.DataFrame, horizon_days: int = 90):
         "peak_month_value": monthly["predicted"].max(),
         "avg_daily": forecast_df["predicted"].mean(),
         "confidence_pct": 95,
+        "r2_score": r2,
+        "mae": mae,
+        "mape": mape,
     }
 
     return ts, forecast_df, metrics, monthly

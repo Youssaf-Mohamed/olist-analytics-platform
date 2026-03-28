@@ -9,12 +9,14 @@ import plotly.graph_objects as go
 from dash_iconify import DashIconify
 
 from utils.data_loader import load_master_data
-from utils.cleaner import apply_chart_layout, pct, tooltip
+from utils.cleaner import apply_chart_layout, filter_by_date, format_brl, pct, tooltip
 
 dash.register_page(__name__, path="/payments", name="Payments & Delivery", order=4)
 
 # ── Load data once ────────────────────────────────────────────────────────────
 df_master = load_master_data()
+DATE_MIN = df_master["order_purchase_timestamp"].min().date()
+DATE_MAX = df_master["order_purchase_timestamp"].max().date()
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 layout = html.Div(
@@ -28,6 +30,22 @@ layout = html.Div(
                 ),
             ],
             className="page-header",
+        ),
+        # Date filter
+        html.Div(
+            [
+                html.Span("Date Range:", className="filter-label"),
+                dcc.DatePickerRange(
+                    id="pay-date-range",
+                    min_date_allowed=DATE_MIN,
+                    max_date_allowed=DATE_MAX,
+                    start_date=DATE_MIN,
+                    end_date=DATE_MAX,
+                    display_format="YYYY-MM-DD",
+                    style={"fontFamily": "Space Mono"},
+                ),
+            ],
+            className="filter-bar",
         ),
         # 2 KPI cards
         html.Div(
@@ -170,8 +188,45 @@ layout = html.Div(
                     ],
                     className="kpi-card kpi-purple",
                 ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.P(
+                                    [
+                                        "Cancellation Rate",
+                                        tooltip(
+                                            "Percentage of total orders that were canceled."
+                                        ),
+                                    ],
+                                    className="kpi-label",
+                                    style={"display": "flex", "alignItems": "center"},
+                                ),
+                                DashIconify(
+                                    icon="ph:x-circle-bold",
+                                    width=20,
+                                    style={
+                                        "color": "var(--red)",
+                                        "marginBottom": "8px",
+                                    },
+                                ),
+                            ],
+                            style={
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "alignItems": "flex-start",
+                            },
+                        ),
+                        html.Div(id="pay-kpi-cancel", className="kpi-value"),
+                        html.P(
+                            "Proportion of canceled orders", className="kpi-delta"
+                        ),
+                    ],
+                    className="kpi-card kpi-red",
+                ),
             ],
             className="kpi-grid",
+            style={"gridTemplateColumns": "repeat(5, 1fr)"},
         ),
         # Payment distribution + Delivery by State
         html.Div(
@@ -251,6 +306,40 @@ layout = html.Div(
             ],
             className="chart-grid chart-grid-1",
         ),
+        # Cancellations over time
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.P(
+                            [
+                                "Cancellations Over Time",
+                                tooltip(
+                                    "Monthly volume of orders with a 'canceled' status."
+                                ),
+                            ],
+                            className="chart-title",
+                            style={"display": "flex", "alignItems": "center"},
+                        ),
+                        html.P(
+                            "Track order cancellations month by month",
+                            className="chart-subtitle",
+                        ),
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="pay-chart-cancellations", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
+                        ),
+                    ],
+                    className="chart-card",
+                ),
+            ],
+            className="chart-grid chart-grid-1",
+            style={"marginTop": "20px"},
+        ),
     ],
     style={"maxWidth": "1600px"},
 )
@@ -262,19 +351,27 @@ layout = html.Div(
     Output("pay-kpi-days", "children"),
     Output("pay-kpi-volume", "children"),
     Output("pay-kpi-install", "children"),
+    Output("pay-kpi-cancel", "children"),
     Output("pay-chart-types", "figure"),
     Output("pay-chart-states", "figure"),
     Output("pay-chart-scatter", "figure"),
-    Input("pay-chart-types", "id"),  # dummy trigger — fires on page load
+    Output("pay-chart-cancellations", "figure"),
+    Input("pay-date-range", "start_date"),
+    Input("pay-date-range", "end_date"),
 )
-def update_payments(_):
-    dff = df_master.copy()
+def update_payments(start_date, end_date):
+    dff = (
+        filter_by_date(df_master, start_date, end_date)
+        if start_date and end_date
+        else df_master.copy()
+    )
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
     on_time_rate = dff["is_on_time"].mean()
     avg_days = dff["delivery_days"].mean()
     total_pay = dff["payment_value"].sum()
     avg_install = dff["payment_installments"].mean()
+    cancel_rate = len(dff[dff["order_status"] == "canceled"]) / max(len(dff["order_id"].unique()), 1)
 
     # Format KPIs
     def _brl(v):
@@ -288,6 +385,7 @@ def update_payments(_):
     kpi_days = f"{avg_days:.1f} days"
     kpi_volume = _brl(total_pay)
     kpi_install = f"{avg_install:.1f}×"
+    kpi_cancel = pct(cancel_rate)
 
     # ── Payment type donut ────────────────────────────────────────────────────
     pay_counts = (
@@ -384,12 +482,40 @@ def update_payments(_):
         yaxis_title="Delivery Days",
     )
 
+    # ── Cancellations Over Time ──────────────────────────────────────────────
+    colds_df = dff[dff["order_status"] == "canceled"]
+    cancel_monthly = (
+        colds_df.groupby("month_year")["order_id"]
+        .nunique()
+        .reset_index()
+        .rename(columns={"order_id": "cancellations", "month_year": "month"})
+        .sort_values("month")
+    )
+    if not cancel_monthly.empty:
+        fig_cancel = go.Figure(
+            go.Bar(
+                x=cancel_monthly["month"],
+                y=cancel_monthly["cancellations"],
+                marker_color="#F87171",
+                hovertemplate="<b>%{x}</b><br>%{y} canceled orders<extra></extra>",
+            )
+        )
+    else:
+        fig_cancel = go.Figure()
+    apply_chart_layout(fig_cancel, height=300)
+    fig_cancel.update_layout(
+        xaxis=dict(tickangle=-45),
+        yaxis=dict(title="Canceled Orders"),
+    )
+
     return (
         kpi_ontime,
         kpi_days,
         kpi_volume,
         kpi_install,
+        kpi_cancel,
         fig_types,
         fig_states,
         fig_scatter,
+        fig_cancel,
     )

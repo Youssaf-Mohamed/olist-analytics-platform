@@ -36,20 +36,20 @@
 
 /* Logo */
 #sidebar-logo {
-    padding: 20px 16px 16px;
+    padding: 22px 18px 18px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex-shrink: 0;
     overflow: hidden;
-    min-height: 64px;
+    min-height: 70px;
 }
 
 .logo-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -64,7 +64,7 @@
 
 .logo-text {
     font-family: var(--font-heading);
-    font-size: 0.95rem;
+    font-size: 1.05rem;
     font-weight: 800;
     color: #FFFFFF;
     letter-spacing: -0.3px;
@@ -91,8 +91,8 @@
 #sidebar-nav {
     display: flex;
     flex-direction: column;
-    padding: 10px 8px;
-    gap: 2px;
+    padding: 12px 10px;
+    gap: 3px;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -101,10 +101,10 @@
 .nav-link {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 14px;
+    padding: 13px 16px;
     border-radius: var(--radius-sm);
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.50);
     text-decoration: none;
     font-family: var(--font-body);
     font-size: 0.95rem;
@@ -145,8 +145,8 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
 }
 
 .nav-label {

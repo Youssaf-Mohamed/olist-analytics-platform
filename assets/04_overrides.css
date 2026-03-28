@@ -6,94 +6,197 @@
    verifying the override still works.
    ==================================================================== */
 
-/* ── DatePicker ── */
-.DateRangePicker {
+/* ── DatePicker (Legacy + Dash 4.x) ── */
+
+/* Container */
+.DateRangePicker,
+.dash-date-picker-range {
     display: block !important;
 }
 
-.DateRangePickerInput {
-    background-color: var(--input-bg) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
+/* NUCLEAR OPTION: Strip ALL white backgrounds from nested divs and inputs, EXCEPT the calendar popover elements */
+.dash-date-picker-range div:not(.DateRangePicker_picker):not(.DayPicker__withBorder):not(.CalendarMonthGrid):not(.CalendarMonth):not(.CalendarDay):not(.DayPicker):not(.DayPicker_transitionContainer):not(.DayPickerNavigation_button),
+.DateRangePicker div:not(.DateRangePicker_picker):not(.DayPicker__withBorder):not(.CalendarMonthGrid):not(.CalendarMonth):not(.CalendarDay):not(.DayPicker):not(.DayPicker_transitionContainer):not(.DayPickerNavigation_button),
+.dash-date-picker-range input,
+.DateRangePicker input {
+    background-color: transparent !important;
+    background: transparent !important;
 }
 
+/* Explicitly style the main input wrapper */
+.DateRangePickerInput,
+.DateRangePickerInput__withBorder,
+.dash-date-picker-range .DateRangePickerInput__withBorder {
+    background-color: var(--input-bg) !important;
+    background: var(--input-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+/* Arrow between dates */
+.DateRangePickerInput_arrow,
+.dash-date-picker-range .DateRangePickerInput_arrow {
+    background-color: transparent !important;
+    color: var(--muted) !important;
+}
+
+.DateRangePickerInput_arrow svg,
 .DateRangePickerInput_arrow_svg {
     fill: var(--muted) !important;
 }
 
-.DateInput {
-    background-color: transparent !important;
-}
-
-.DateInput_input {
+/* Date inputs */
+.DateInput_input,
+.dash-date-picker-range input,
+.DateRangePickerInput .DateInput_input {
     background-color: transparent !important;
     color: var(--input-color) !important;
     font-family: var(--font-mono) !important;
     font-size: 0.85rem !important;
+    border-bottom: 2px solid transparent !important;
+    padding: 8px 10px !important;
 }
 
-.DateInput_input::placeholder {
+.DateInput_input__focused,
+.DateInput_input:focus {
+    border-bottom: 2px solid var(--cyan) !important;
+}
+
+.DateInput_input::placeholder,
+.dash-date-picker-range input::placeholder {
     color: var(--muted) !important;
 }
 
-.DateRangePicker_picker {
-    background-color: var(--glass-bg2) !important;
-    backdrop-filter: var(--glass-blur) !important;
-    -webkit-backdrop-filter: var(--glass-blur) !important;
+/* Focused input highlight */
+.DateInput_fang {
+    display: none !important;
+}
+
+/* ── Calendar popover ── */
+.DateRangePicker_picker,
+.DayPicker__withBorder {
+    background-color: #111628 !important;
+    background: #111628 !important;
     border: 1px solid var(--border2) !important;
-    border-radius: 8px !important;
-    box-shadow: var(--glass-shadow) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
     z-index: 1050 !important;
+    overflow: hidden !important;
 }
 
-.DayPicker {
-    background-color: transparent !important;
-}
-
-.DayPicker_transitionContainer {
-    background-color: transparent !important;
-}
-
+.DayPicker,
+.DayPicker_transitionContainer,
 .CalendarMonthGrid,
 .CalendarMonth {
     background-color: transparent !important;
 }
 
+/* Month caption (e.g. "January 2018") */
 .CalendarMonth_caption {
     color: var(--text) !important;
+    font-family: var(--font-heading) !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    padding-top: 18px !important;
+    padding-bottom: 40px !important;
 }
 
+/* Weekday headers */
 .DayPicker_weekHeader {
     color: var(--muted) !important;
 }
 
+.DayPicker_weekHeader small {
+    font-size: 0.72rem !important;
+    color: var(--text-soft) !important;
+    font-weight: 600 !important;
+}
+
+/* ── Calendar days ── */
 .CalendarDay {
     background-color: transparent !important;
-    color: var(--input-color) !important;
-    border: 1px solid var(--border) !important;
+    color: var(--text-soft) !important;
+    border: 1px solid rgba(255, 255, 255, 0.04) !important;
+    font-family: var(--font-body) !important;
+    font-size: 0.82rem !important;
+    transition: all 0.12s ease !important;
 }
 
 .CalendarDay__default:hover {
     background-color: var(--surface3) !important;
     color: var(--text) !important;
+    border-color: var(--border2) !important;
 }
 
 .CalendarDay__selected,
 .CalendarDay__selected:hover {
+    background-color: var(--cyan) !important;
     background: var(--cyan) !important;
     border-color: var(--cyan) !important;
     color: #fff !important;
+    font-weight: 700 !important;
 }
 
-.CalendarDay__selected_span {
+.CalendarDay__selected_span,
+.CalendarDay__hovered_span {
+    background-color: var(--cyan-glow) !important;
     background: var(--cyan-glow) !important;
-    border-color: var(--cyan) !important;
+    border-color: rgba(56, 189, 248, 0.2) !important;
     color: var(--text) !important;
 }
 
 .CalendarDay__blocked_out_of_range {
-    background-color: rgba(0, 0, 0, 0.1) !important;
-    color: var(--muted) !important;
+    background-color: transparent !important;
+    color: rgba(75, 90, 122, 0.4) !important;
+    border-color: transparent !important;
+}
+
+/* ── Navigation arrows (prev/next month) ── */
+.DayPickerNavigation_button {
+    background-color: var(--surface2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    transition: all 0.15s ease !important;
+}
+
+.DayPickerNavigation_button:hover {
+    background-color: var(--surface3) !important;
+    border-color: var(--cyan) !important;
+}
+
+.DayPickerNavigation_svg {
+    fill: var(--text-soft) !important;
+    width: 16px !important;
+    height: 15px !important;
+}
+
+.DayPickerNavigation_button:hover .DayPickerNavigation_svg {
+    fill: var(--cyan) !important;
+}
+
+/* ── Clear date button ── */
+.DateRangePickerInput_clearDates {
+    background-color: transparent !important;
+    background: transparent !important;
+    padding: 4px !important;
+}
+
+.DateRangePickerInput_clearDates svg {
+    fill: var(--muted) !important;
+}
+
+.DateRangePickerInput_clearDates:hover svg {
+    fill: var(--red) !important;
+}
+
+/* ── Calendar icon ── */
+.DateRangePickerInput_calendarIcon {
+    padding: 4px 8px !important;
+}
+
+.DateRangePickerInput_calendarIcon svg {
+    fill: var(--muted) !important;
 }
 
 /* ── Dropdown (Dash dcc.Dropdown with className="dash-dropdown") ── */

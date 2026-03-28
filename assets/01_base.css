@@ -45,8 +45,8 @@
 
     /* Sidebar */
     --sidebar-bg: #0E1120;
-    --sidebar-w: 240px;
-    --sidebar-collapsed: 72px;
+    --sidebar-w: 260px;
+    --sidebar-collapsed: 76px;
     --nav-active-bg: rgba(56, 189, 248, 0.12);
     --nav-hover-bg: rgba(255, 255, 255, 0.05);
     --nav-active-border: var(--cyan);

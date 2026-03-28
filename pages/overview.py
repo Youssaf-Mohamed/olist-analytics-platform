@@ -6,6 +6,7 @@ KPIs + Revenue Over Time + Orders by Status + Top 10 Categories
 import dash
 from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go
+import pandas as pd
 from dash_iconify import DashIconify
 
 from utils.data_loader import load_master_data
@@ -82,7 +83,7 @@ layout = html.Div(
                             },
                         ),
                         html.Div(id="kpi-revenue", className="kpi-value"),
-                        html.P("Sum of all order values (R$)", className="kpi-delta"),
+                        html.P(id="kpi-revenue-delta", className="kpi-delta"),
                     ],
                     className="kpi-card kpi-cyan",
                 ),
@@ -116,9 +117,7 @@ layout = html.Div(
                             },
                         ),
                         html.Div(id="kpi-orders", className="kpi-value"),
-                        html.P(
-                            "Unique orders in selected period", className="kpi-delta"
-                        ),
+                        html.P(id="kpi-orders-delta", className="kpi-delta"),
                     ],
                     className="kpi-card kpi-purple",
                 ),
@@ -192,8 +191,43 @@ layout = html.Div(
                     ],
                     className="kpi-card kpi-amber",
                 ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.P(
+                                    [
+                                        "Avg Order Value",
+                                        tooltip(
+                                            "Average revenue per order (AOV) — total revenue divided by total orders."
+                                        ),
+                                    ],
+                                    className="kpi-label",
+                                    style={"display": "flex", "alignItems": "center"},
+                                ),
+                                DashIconify(
+                                    icon="ph:receipt-bold",
+                                    width=20,
+                                    style={
+                                        "color": "var(--indigo)",
+                                        "marginBottom": "8px",
+                                    },
+                                ),
+                            ],
+                            style={
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "alignItems": "flex-start",
+                            },
+                        ),
+                        html.Div(id="kpi-aov", className="kpi-value"),
+                        html.P("Revenue ÷ Orders (R$)", className="kpi-delta"),
+                    ],
+                    className="kpi-card kpi-purple",
+                ),
             ],
             className="kpi-grid",
+            style={"gridTemplateColumns": "repeat(5, 1fr)"},
         ),
         # Revenue over time (full width)
         html.Div(
@@ -204,8 +238,13 @@ layout = html.Div(
                         html.P(
                             "Monthly revenue trend (R$)", className="chart-subtitle"
                         ),
-                        dcc.Graph(
-                            id="chart-revenue-time", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="chart-revenue-time", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -222,8 +261,13 @@ layout = html.Div(
                         html.P(
                             "Distribution of order statuses", className="chart-subtitle"
                         ),
-                        dcc.Graph(
-                            id="chart-orders-status", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="chart-orders-status", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
@@ -235,14 +279,53 @@ layout = html.Div(
                             "Sum of item_price + freight per category",
                             className="chart-subtitle",
                         ),
-                        dcc.Graph(
-                            id="chart-top-categories", config={"displayModeBar": False}
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="chart-top-categories", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
                         ),
                     ],
                     className="chart-card",
                 ),
             ],
             className="chart-grid chart-grid-2",
+        ),
+        # Revenue Heatmap (full width)
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.P(
+                            [
+                                "Revenue by Weekday & Hour",
+                                tooltip(
+                                    "Darker and brighter colors indicate higher revenue volumes during that specific hour and day."
+                                ),
+                            ],
+                            className="chart-title",
+                            style={"display": "flex", "alignItems": "center"},
+                        ),
+                        html.P(
+                            "Identify peak shopping times (Local Time)", 
+                            className="chart-subtitle"
+                        ),
+                        dcc.Loading(
+                            dcc.Graph(
+                                id="chart-revenue-heatmap", config={"displayModeBar": False}
+                            ),
+                            type="circle",
+                            color="#38BDF8",
+                            parent_className="chart-loading-wrapper",
+                        ),
+                    ],
+                    className="chart-card",
+                ),
+            ],
+            className="chart-grid chart-grid-1",
+            style={"marginTop": "20px"},
         ),
     ],
     style={"maxWidth": "1600px"},
@@ -255,9 +338,13 @@ layout = html.Div(
     Output("kpi-orders", "children"),
     Output("kpi-review", "children"),
     Output("kpi-ontime", "children"),
+    Output("kpi-aov", "children"),
+    Output("kpi-revenue-delta", "children"),
+    Output("kpi-orders-delta", "children"),
     Output("chart-revenue-time", "figure"),
     Output("chart-orders-status", "figure"),
     Output("chart-top-categories", "figure"),
+    Output("chart-revenue-heatmap", "figure"),
     Input("overview-date-range", "start_date"),
     Input("overview-date-range", "end_date"),
 )
@@ -273,6 +360,48 @@ def update_overview(start_date, end_date):
     total_ord = dff["order_id"].nunique()
     avg_review = dff["review_score"].mean()
     on_time = dff["is_on_time"].mean()
+    aov = total_rev / max(total_ord, 1)
+
+    # ── MoM Growth ───────────────────────────────────────────────────────────
+    # Calculate the selected period length to construct the "previous" window
+    sd = pd.Timestamp(start_date) if start_date else dff["order_purchase_timestamp"].min()
+    ed = pd.Timestamp(end_date) if end_date else dff["order_purchase_timestamp"].max()
+    delta = ed - sd
+    prev_start = sd - delta - pd.Timedelta(days=1)
+    prev_end = sd - pd.Timedelta(days=1)
+    prev = df_master[
+        (df_master["order_purchase_timestamp"] >= prev_start)
+        & (df_master["order_purchase_timestamp"] <= prev_end)
+    ]
+    prev_rev = prev["total_order_value"].sum()
+    prev_ord = prev["order_id"].nunique()
+
+    def _arrow(current, previous):
+        """Return a styled growth/decline element."""
+        if previous == 0:
+            return "vs. prior period"
+        pct_chg = ((current - previous) / previous) * 100
+        if pct_chg > 0:
+            return html.Span(
+                [
+                    DashIconify(icon="ph:arrow-up-right-bold", width=14,
+                                style={"marginRight": "3px"}),
+                    f"+{pct_chg:.1f}% vs prior period",
+                ],
+                style={"color": "var(--green)", "display": "flex", "alignItems": "center"},
+            )
+        else:
+            return html.Span(
+                [
+                    DashIconify(icon="ph:arrow-down-right-bold", width=14,
+                                style={"marginRight": "3px"}),
+                    f"{pct_chg:.1f}% vs prior period",
+                ],
+                style={"color": "var(--red)", "display": "flex", "alignItems": "center"},
+            )
+
+    rev_delta = _arrow(total_rev, prev_rev)
+    ord_delta = _arrow(total_ord, prev_ord)
 
     # ── Revenue Over Time ─────────────────────────────────────────────────────
     monthly = (
@@ -387,6 +516,40 @@ def update_overview(start_date, end_date):
     apply_chart_layout(fig_cat, height=300)
     fig_cat.update_layout(yaxis=dict(tickfont=dict(size=10)))
 
+    # ── Revenue Heatmap ───────────────────────────────────────────────────────
+    dow_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    if "purchase_dow" in dff.columns and "purchase_hour" in dff.columns:
+        hm_data = (
+            dff.groupby(["purchase_dow", "purchase_hour"])["total_order_value"]
+            .sum()
+            .reset_index()
+        )
+        hm_pivot = hm_data.pivot(index="purchase_dow", columns="purchase_hour", values="total_order_value").fillna(0)
+        # Ensure all hours (0-23) and DOWs are present
+        hm_pivot = hm_pivot.reindex(index=dow_order, columns=list(range(24)), fill_value=0)
+    else:
+        hm_pivot = pd.DataFrame(0, index=dow_order, columns=list(range(24)))
+
+    fig_hm = go.Figure(
+        data=go.Heatmap(
+            z=hm_pivot.values,
+            x=[f"{h:02d}:00" for h in hm_pivot.columns],
+            y=hm_pivot.index,
+            colorscale=[[0, "#0B0E17"], [0.2, "#1E293B"], [0.5, "#8B5CF6"], [1.0, "#00D4FF"]],
+            showscale=False,
+            hovertemplate="<b>%{y} at %{x}</b><br>Revenue: R$ %{z:,.0f}<extra></extra>",
+            xgap=2,
+            ygap=2,
+        )
+    )
+    apply_chart_layout(fig_hm, height=320)
+    # Reverse y-axis so Monday is at the top
+    fig_hm.update_layout(
+        xaxis=dict(gridcolor="rgba(0,0,0,0)", fixedrange=True, tickangle=-45),
+        yaxis=dict(gridcolor="rgba(0,0,0,0)", autorange="reversed", fixedrange=True),
+        margin=dict(l=80, r=20, t=10, b=20),
+    )
+
     return (
         format_brl(total_rev),
         f"{total_ord:,}",
@@ -402,7 +565,11 @@ def update_overview(start_date, end_date):
             style={"display": "flex", "alignItems": "center"},
         ),
         pct(on_time),
+        format_brl(aov),
+        rev_delta,
+        ord_delta,
         fig_time,
         fig_status,
         fig_cat,
+        fig_hm,
     )

@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 
 # ── Reference date (last date in dataset) ────────────────────────────────────
 REFERENCE_DATE = pd.Timestamp("2018-09-01")
@@ -81,7 +82,11 @@ def cluster_customers(rfm_df: pd.DataFrame, n_clusters: int = 4) -> pd.DataFrame
 
     # K-Means
     km = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    rfm["segment_id"] = km.fit_predict(X_scaled)
+    labels = km.fit_predict(X_scaled)
+    rfm["segment_id"] = labels
+
+    sil_score = silhouette_score(X_scaled, labels, sample_size=5000, random_state=42)
+    db_score = davies_bouldin_score(X_scaled, labels)
 
     # ── Label clusters by RFM profile ─────────────────────────────────────────
     # Champions  = low recency (bought recently), high freq, high monetary
@@ -111,7 +116,8 @@ def cluster_customers(rfm_df: pd.DataFrame, n_clusters: int = 4) -> pd.DataFrame
     rfm["pc1"] = pcs[:, 0]
     rfm["pc2"] = pcs[:, 1]
 
-    return rfm
+    metrics = {"silhouette": float(sil_score), "davies_bouldin": float(db_score)}
+    return rfm, metrics
 
 
 def get_segment_summary(rfm_df: pd.DataFrame) -> pd.DataFrame:
@@ -131,4 +137,15 @@ def get_segment_summary(rfm_df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     summary["pct"] = (summary["count"] / total * 100).round(1)
+    
+    INSIGHTS = {
+        "Champions": "Reward them with early access or exclusive offers. Can be brand promoters.",
+        "Loyal Customers": "Upsell higher value products. Ask for reviews and encourage referrals.",
+        "Potential Loyalists": "Offer a loyalty program and recommend complementary products.",
+        "New Customers": "Provide excellent onboarding. Give early discount to encourage repeat purchase.",
+        "At Risk": "Send personalized win-back emails with helpful resources or aggressive discounts.",
+        "Hibernating": "Don't spend too much. Send standard promotional campaigns periodically.",
+    }
+    summary["insight"] = summary["segment"].map(INSIGHTS).fillna("Standard engagement.")
+    
     return summary.sort_values("avg_monetary", ascending=False)
