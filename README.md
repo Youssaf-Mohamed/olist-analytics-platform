@@ -69,29 +69,7 @@ It is designed to feel like a modern decision-support workspace rather than a co
 
 ---
 
-## Screenshots
 
-Add screenshots here for a stronger GitHub presentation. Recommended captures:
-
-- `Overview` dashboard
-- `Geography` choropleth in light mode
-- `AI Analyst` panel
-- `Forecasting` page
-- `Sellers` page
-
-Example structure:
-
-```text
-docs/screenshots/overview.png
-docs/screenshots/geography-light.png
-docs/screenshots/ai-panel.png
-docs/screenshots/forecasting.png
-docs/screenshots/sellers.png
-```
-
-Then reference them in the README with standard markdown images.
-
----
 
 ## Architecture Highlights
 
