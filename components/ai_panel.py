@@ -174,6 +174,19 @@ def chat_message_component(role: str, text: str, label: str | None = None) -> ht
     avatar_icon = "ph:user-bold" if is_user else "ph:brain-bold"
     avatar_label = "You" if is_user else "AI Analyst"
     bubble_label = label or avatar_label
+    
+    copy_btn = None
+    if not is_user:
+        copy_btn = html.Button(
+            [
+                DashIconify(icon="ph:copy-bold", width=14),
+                html.Span("Copy", style={"marginLeft": "4px"}),
+            ],
+            className="chat-msg-copy-btn",
+            **{"data-text": text},
+            title="Copy to clipboard",
+        )
+
     return html.Div(
         [
             html.Div(
@@ -182,7 +195,13 @@ def chat_message_component(role: str, text: str, label: str | None = None) -> ht
             ),
             html.Div(
                 [
-                    html.Div(bubble_label, className="chat-msg-meta"),
+                    html.Div(
+                        [
+                            html.Span(bubble_label, className="chat-msg-meta"),
+                            copy_btn,
+                        ],
+                        style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "6px"}
+                    ),
                     dcc.Markdown(text, className="chat-msg-copy", link_target="_blank"),
                 ],
                 className=f"chat-msg chat-msg-{'user' if is_user else 'ai'}",
@@ -228,17 +247,13 @@ def build_ai_panel() -> html.Div:
                     html.Div(
                         [
                             html.Div(
-                                DashIconify(icon="ph:brain-bold", width=22),
+                                DashIconify(icon="ph:brain-bold", width=20),
                                 className="ai-panel-orb",
                             ),
                             html.Div(
                                 [
                                     html.Span("AI ANALYST", className="ai-panel-eyebrow"),
-                                    html.Div("Dashboard Copilot", className="ai-panel-title"),
-                                    html.Div(
-                                        "Premium analysis grounded in the active page context.",
-                                        className="ai-panel-subtitle",
-                                    ),
+                                    html.Div("Dashboard Olist", className="ai-panel-title"),
                                 ],
                                 className="ai-panel-title-wrap",
                             ),
@@ -248,7 +263,7 @@ def build_ai_panel() -> html.Div:
                     html.Button(
                         DashIconify(
                             icon="ph:x-bold",
-                            width=16,
+                            width=14,
                             color="rgba(255,255,255,0.4)",
                         ),
                         id="ai-panel-close",

@@ -604,6 +604,7 @@ clientside_callback(
     function(nClose, nSidebar) {
         var panel = document.getElementById('ai-panel');
         var main = document.getElementById('main-content');
+        var input = document.getElementById('chat-input');
         if (!panel) return window.dash_clientside.no_update;
         var ctx = dash_clientside.callback_context;
         if (!ctx.triggered.length) return window.dash_clientside.no_update;
@@ -615,7 +616,9 @@ clientside_callback(
             var isCollapsed = panel.classList.contains('collapsed');
             if (isCollapsed) {
                 panel.classList.remove('collapsed');
-                if (main) main.style.marginRight = '380px';
+                if (main) main.style.marginRight = '400px';
+                // Auto-focus input when opening
+                setTimeout(function() { if (input) input.focus(); }, 400);
             } else {
                 panel.classList.add('collapsed');
                 if (main) main.style.marginRight = '0px';
@@ -631,6 +634,41 @@ clientside_callback(
     Input("ai-panel-close", "n_clicks"),
     Input("sidebar-ai-btn", "n_clicks"),
     prevent_initial_call=True,
+)
+
+
+# ── Clientside: Copy to clipboard ────────────────────────────────────────────
+clientside_callback(
+    """
+    function(n_clicks) {
+        const ctx = window.dash_clientside.callback_context;
+        if (!ctx.triggered.length) return '';
+        
+        // Use event delegation for dynamic buttons
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.chat-msg-copy-btn');
+            if (btn && !btn.classList.contains('processing')) {
+                const text = btn.getAttribute('data-text');
+                if (text) {
+                    btn.classList.add('processing');
+                    navigator.clipboard.writeText(text).then(() => {
+                        const original = btn.innerHTML;
+                        btn.innerHTML = '<span>Copied!</span>';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = original;
+                            btn.classList.remove('copied');
+                            btn.classList.remove('processing');
+                        }, 2000);
+                    });
+                }
+            }
+        });
+        return '';
+    }
+    """,
+    Output("chat-messages", "data-copy"),
+    Input("chat-messages", "children"),
 )
 
 
