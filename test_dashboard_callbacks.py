@@ -17,7 +17,7 @@ from pages.reviews import update_reviews
 from pages.sellers import DATE_MAX as SELLERS_MAX
 from pages.sellers import DATE_MIN as SELLERS_MIN
 from pages.sellers import update_sellers
-from utils.gemini_analyst import generate_executive_summary
+from utils.ai_analyst import generate_executive_summary
 from utils.retention import build_retention_matrix
 
 

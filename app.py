@@ -18,12 +18,11 @@ from components.ai_panel import (
 )
 from components.shell import build_root_layout
 from utils.data_loader import load_data_bundle
-from utils.gemini_analyst import (
+from utils.ai_analyst import (
     build_data_summary,
     chat_with_data,
     generate_executive_summary,
 )
-
 # ── App initialisation ────────────────────────────────────────────────────────
 app = dash.Dash(
     __name__,
@@ -37,6 +36,19 @@ app = dash.Dash(
         },
     ],
     title="Olist BI Dashboard",
+)
+
+# Now that app is instantiated, we can import pages (which call register_page)
+from pages import (
+    overview,
+    geography,
+    reviews,
+    recommendations,
+    payments,
+    segmentation,
+    cohorts,
+    forecasting,
+    sellers,
 )
 
 app.index_string = """
@@ -461,266 +473,6 @@ def _build_topbar() -> html.Div:
 
 
 # ── Root layout ───────────────────────────────────────────────────────────────
-app.layout = html.Div(
-    id="app-container",
-    **{"data-theme": "dark"},  # initial theme
-    children=[
-        # ── Sidebar ──────────────────────────────────────────────────────────
-        html.Nav(
-            id="sidebar",
-            children=[
-                # Logo
-                html.Div(
-                    [
-                        html.Img(
-                            src=app.get_asset_url("logo.svg"),
-                            className="logo-icon",
-                        ),
-                        html.Div(
-                            [
-                                html.Span("OLIST BI", className="logo-text"),
-                                html.Span("Intelligence System", className="logo-sub"),
-                            ],
-                            className="logo-text-wrap",
-                        ),
-                    ],
-                    id="sidebar-logo",
-                ),
-                # Navigation links
-                html.Div(
-                    [_nav_link(item) for item in NAV_ITEMS],
-                    id="sidebar-nav",
-                ),
-                # AI Analyst sidebar button
-                html.Div(
-                    html.A(
-                        [
-                            html.Span(
-                                DashIconify(icon="ph:brain-bold", width=18),
-                                className="nav-icon",
-                            ),
-                            html.Span("AI Analyst", className="nav-label"),
-                        ],
-                        id="sidebar-ai-btn",
-                        className="nav-link ai-nav-link",
-                        title="AI Analyst",
-                        **{"data-label": "AI Analyst"},
-                    ),
-                    style={
-                        "borderTop": "1px solid rgba(255,255,255,0.06)",
-                        "paddingTop": "6px",
-                        "marginTop": "auto",
-                    },
-                ),
-                # Collapse / expand toggle
-                html.Div(
-                    [
-                        html.Button(
-                            DashIconify(
-                                icon="ph:caret-left-bold",
-                                width=14,
-                                id="toggle-icon",
-                                color="rgba(255,255,255,0.55)",
-                            ),
-                            id="sidebar-toggle-btn",
-                            title="Collapse sidebar",
-                            n_clicks=0,
-                            style={
-                                "background": "rgba(255,255,255,0.06)",
-                                "border": "1px solid rgba(255,255,255,0.1)",
-                                "borderRadius": "6px",
-                                "width": "30px",
-                                "height": "30px",
-                                "cursor": "pointer",
-                                "display": "flex",
-                                "alignItems": "center",
-                                "justifyContent": "center",
-                                "transition": "all 0.22s ease",
-                            },
-                        ),
-                    ],
-                    id="sidebar-toggle",
-                    style={
-                        "padding": "10px 14px",
-                        "borderTop": "1px solid rgba(255,255,255,0.07)",
-                        "display": "flex",
-                        "justifyContent": "flex-end",
-                    },
-                ),
-                # Footer
-                html.Div("v1.0 · Big Data & Analytics", id="sidebar-footer"),
-            ],
-        ),
-        # ── Main content area ─────────────────────────────────────────────────
-        html.Main(
-            id="main-content",
-            children=[
-                # Top bar
-                html.Div(id="topbar", children=_build_topbar()),
-                dcc.Loading(
-                    html.Div(id="page-shell", children=[dash.page_container]),
-                    type="default",
-                    parent_className="page-shell-loading",
-                ),
-            ],
-        ),
-        dcc.Store(id="theme-store", storage_type="local", data=None),
-        dcc.Store(
-            id="active-page-context",
-            data={"page": "overview", "filters": {}, "headline_metrics": {}},
-        ),
-        dcc.Store(id="overview-page-context"),
-        dcc.Store(id="geography-page-context"),
-        dcc.Store(id="reviews-page-context"),
-        dcc.Store(id="recommendations-page-context"),
-        dcc.Store(id="payments-page-context"),
-        dcc.Store(id="segmentation-page-context"),
-        dcc.Store(id="cohorts-page-context"),
-        dcc.Store(id="forecasting-page-context"),
-        dcc.Store(id="sellers-page-context"),
-        # AI Chatbot Panel
-        html.Div(
-            id="ai-panel",
-            className="ai-panel collapsed",
-            children=[
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.Div(
-                                    DashIconify(icon="ph:brain-bold", width=20),
-                                    className="ai-panel-orb",
-                                ),
-                                html.Div(
-                                    [
-                                        html.Span("AI ANALYST", className="ai-panel-eyebrow"),
-                                        html.Div("Dashboard Copilot", className="ai-panel-title"),
-                                        html.Div(
-                                            "Premium analysis grounded in the active page context.",
-                                            className="ai-panel-subtitle",
-                                        ),
-                                    ],
-                                    className="ai-panel-title-wrap",
-                                ),
-                            ],
-                            className="ai-panel-title-block",
-                        ),
-                        html.Button(
-                            DashIconify(
-                                icon="ph:x-bold",
-                                width=14,
-                                color="rgba(255,255,255,0.4)",
-                            ),
-                            id="ai-panel-close",
-                            n_clicks=0,
-                            className="ai-close-btn",
-                        ),
-                    ],
-                    className="ai-panel-header",
-                ),
-                html.Div(
-                    [
-                        html.Div("Live Context", className="ai-context-eyebrow"),
-                        html.Div(
-                            "Sales Overview",
-                            id="ai-context-title",
-                            className="ai-context-title",
-                        ),
-                        html.Div(
-                            "0 active filters • 0 headline metrics • Context-aware answers",
-                            id="ai-context-meta",
-                            className="ai-context-meta",
-                        ),
-                    ],
-                    className="ai-context-card",
-                ),
-                html.Div(
-                    [
-                        html.Button(
-                            [
-                                DashIconify(icon="ph:file-text-bold", width=15),
-                                html.Span("Executive Summary"),
-                            ],
-                            id="chat-summary-btn",
-                            n_clicks=0,
-                            className="chat-action-btn chat-action-btn-primary",
-                        ),
-                        html.Button(
-                            "Strongest Signal",
-                            id="chat-suggest-1",
-                            n_clicks=0,
-                            className="chat-action-btn",
-                        ),
-                        html.Button(
-                            "Revenue Drivers",
-                            id="chat-suggest-2",
-                            n_clicks=0,
-                            className="chat-action-btn",
-                        ),
-                        html.Button(
-                            "Next Action",
-                            id="chat-suggest-3",
-                            n_clicks=0,
-                            className="chat-action-btn",
-                        ),
-                        html.Button(
-                            [
-                                DashIconify(icon="ph:broom-bold", width=14),
-                                html.Span("Clear"),
-                            ],
-                            id="chat-clear-btn",
-                            n_clicks=0,
-                            className="chat-action-btn chat-action-btn-secondary",
-                        ),
-                    ],
-                    className="chat-quick-actions",
-                ),
-                dcc.Loading(
-                    html.Div(
-                        id="chat-messages",
-                        className="chat-messages",
-                        children=_build_chat_messages([]),
-                    ),
-                    type="default",
-                    parent_className="chat-loading-shell",
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            "Ask for trends, anomalies, root causes, opportunities, or the best next action.",
-                            className="chat-input-hint",
-                        ),
-                        html.Div(
-                            [
-                                dcc.Input(
-                                    id="chat-input",
-                                    type="text",
-                                    placeholder="Ask about the current page, filters, and KPIs...",
-                                    className="chat-input",
-                                    debounce=False,
-                                    n_submit=0,
-                                ),
-                                html.Button(
-                                    DashIconify(icon="ph:paper-plane-right-fill", width=16),
-                                    id="chat-send",
-                                    n_clicks=0,
-                                    className="chat-send-btn",
-                                ),
-                            ],
-                            className="chat-composer",
-                        ),
-                    ],
-                    className="chat-input-area",
-                ),
-                dcc.Store(id="chat-history", data="[]"),
-                dcc.Store(id="chat-suggestions-store", data="[]"),
-            ],
-        ),
-    ],
-)
-
-
-# ── Clientside: active nav link highlighting ──────────────────────────────────
 app.layout = build_root_layout(
     nav_items=NAV_ITEMS,
     date_min=GLOBAL_DATE_MIN,
@@ -729,7 +481,24 @@ app.layout = build_root_layout(
     page_container=dash.page_container,
 )
 
+# Validation layout to suppress callback errors at startup in multi-page apps
+app.validation_layout = html.Div(
+    [
+        app.layout,
+        overview.layout,
+        geography.layout,
+        reviews.layout,
+        recommendations.layout,
+        payments.layout,
+        segmentation.layout,
+        cohorts.layout,
+        forecasting.layout,
+        sellers.layout,
+    ]
+)
 
+
+# ── Clientside: active nav link highlighting ──────────────────────────────────
 clientside_callback(
     """
     function(pathname) {

@@ -23,5 +23,5 @@ venv\Scripts\python.exe -m unittest tests.test_data_integrity test_dashboard_cal
 ## Useful Notes
 
 - If CSS or theme changes do not appear immediately, use `Ctrl + F5`.
-- If you want Gemini-powered AI responses, set `GEMINI_API_KEY` before starting the app.
+- If you want Groq-powered AI responses, set `GROQ_API_KEY` before starting the app.
 - If you need to rebuild cached analytics marts, delete `.cache/analytics_bundle.pkl` and restart the server.

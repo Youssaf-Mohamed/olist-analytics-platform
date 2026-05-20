@@ -1,30 +1,25 @@
 """
-AI chatbot helpers for the dashboard.
+AI chatbot helpers for the dashboard using Groq API.
 """
 
 from __future__ import annotations
 
 import os
+import requests
 from typing import Any
 
 import pandas as pd
 
-_GEMINI_AVAILABLE = False
-_client = None
-_MODEL_NAME = "gemini-2.0-flash"
+_AI_AVAILABLE = False
+_API_KEY = os.getenv("GROQ_API_KEY", "")
+_API_URL = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
+_MODEL_NAME = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-try:
-    from google import genai
-
-    _api_key = os.getenv("GEMINI_API_KEY", "")
-    if _api_key:
-        _client = genai.Client(api_key=_api_key)
-        _GEMINI_AVAILABLE = True
-        print("[gemini] Gemini API ready.")
-    else:
-        print("[gemini] GEMINI_API_KEY not set, using rule-based responses.")
-except ImportError:
-    print("[gemini] google-genai not installed, using rule-based responses.")
+if _API_KEY:
+    _AI_AVAILABLE = True
+    print(f"[ai] Groq API ready (model: {_MODEL_NAME}).")
+else:
+    print("[ai] GROQ_API_KEY not set, using rule-based responses.")
 
 
 SYSTEM_PROMPT = """You are an AI data analyst embedded in the Olist BI dashboard.
@@ -132,39 +127,35 @@ def chat_with_data(
 ) -> str:
     page_summary = _format_page_context(page_context)
 
-    if not _GEMINI_AVAILABLE or _client is None:
+    if not _AI_AVAILABLE:
         return _fallback_chat(user_message, data_summary, page_summary)
 
-    contents = [
-        {
-            "role": "user",
-            "parts": [{"text": f"{SYSTEM_PROMPT}\n\n{data_summary}\n\n{page_summary}"}],
-        },
-        {
-            "role": "model",
-            "parts": [
-                {
-                    "text": "Understood. I will answer using the dataset summary and the active dashboard context."
-                }
-            ],
-        },
+    messages = [
+        {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{data_summary}\n\n{page_summary}"},
     ]
 
     for message in history:
-        contents.append(
-            {
-                "role": "user" if message["role"] == "user" else "model",
-                "parts": [{"text": message["content"]}],
-            }
-        )
+        messages.append({"role": message["role"], "content": message["content"]})
 
-    contents.append({"role": "user", "parts": [{"text": user_message}]})
+    messages.append({"role": "user", "content": user_message})
 
     try:
-        response = _client.models.generate_content(model=_MODEL_NAME, contents=contents)
-        return response.text
+        headers = {
+            "Authorization": f"Bearer {_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": _MODEL_NAME,
+            "messages": messages,
+            "temperature": 0.1
+        }
+        
+        response = requests.post(_API_URL, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        
+        return response.json()["choices"][0]["message"]["content"]
     except Exception as exc:
-        print(f"[gemini] API error: {exc}")
+        print(f"[ai] API error: {exc}")
         return _fallback_chat(user_message, data_summary, page_summary, api_configured=True)
 
 
@@ -220,7 +211,7 @@ def _fallback_chat(
     elif any(word in message for word in ["payment", "pay", "دفع"]):
         response_parts.append(summary_dict.get("payments_line", "Payment data not available."))
     else:
-        hint = "\nGemini is temporarily unavailable." if api_configured else ""
+        hint = "\nAI Assistant is temporarily unavailable." if api_configured else ""
         response_parts.append(
             "I can answer questions about revenue, categories, states, reviews, delivery, and payments."
             + hint
@@ -239,17 +230,27 @@ def generate_executive_summary(
         f"{data_summary}\n\n{page_summary}"
     )
 
-    if _GEMINI_AVAILABLE and _client is not None:
+    if _AI_AVAILABLE:
         try:
-            response = _client.models.generate_content(
-                model=_MODEL_NAME,
-                contents=[
-                    {"role": "user", "parts": [{"text": f"{SYSTEM_PROMPT}\n\n{prompt}"}]}
+            headers = {
+                "Authorization": f"Bearer {_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": _MODEL_NAME,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
                 ],
-            )
-            return response.text
+                "temperature": 0.1
+            }
+            
+            response = requests.post(_API_URL, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            return response.json()["choices"][0]["message"]["content"]
         except Exception as exc:
-            print(f"[gemini] Executive summary fallback due to error: {exc}")
+            print(f"[ai] Executive summary fallback due to error: {exc}")
 
     page_name = page_context.get("page", "dashboard") if page_context else "dashboard"
     filters = page_context.get("filters", {}) if page_context else {}

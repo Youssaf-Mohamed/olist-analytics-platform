@@ -51,7 +51,7 @@ It is designed to feel like a modern decision-support workspace rather than a co
 - **Cohort retention** tracking for delivered orders across customer lifecycle periods.
 - **Forecasting** with backtest-aware evaluation instead of misleading train-only metrics.
 - **Seller analytics** for delivery, satisfaction, and regional performance benchmarking.
-- **AI Analyst panel** with quick actions, page-aware context, and fallback responses when Gemini is unavailable.
+- **AI Analyst panel** with quick actions, page-aware context, and fallback responses when the AI service is unavailable.
 
 ---
 
@@ -112,7 +112,7 @@ Core analytics and callback outputs are covered by tests under `tests/` and `tes
 | Frontend UI | Dash, Plotly |
 | Data Processing | Pandas, NumPy |
 | Machine Learning | Scikit-Learn |
-| AI Assistant | Google GenAI SDK with fallback mode |
+| AI Assistant | Groq API with fallback mode |
 | NLP | WordCloud |
 | Testing | Python `unittest` |
 | Styling | Custom CSS architecture |
@@ -158,7 +158,7 @@ For full local setup, see [SETUP.md](SETUP.md).
 
 ## AI Analyst
 
-- If `GEMINI_API_KEY` is set, the assistant uses Gemini.
+- If `GROQ_API_KEY` is set, the assistant uses Groq.
 - If the key is missing, the panel still works in fallback mode.
 - The panel is context-aware and can consume:
   - active page

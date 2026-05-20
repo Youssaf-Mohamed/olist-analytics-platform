@@ -35,7 +35,7 @@ Windows CMD:
 
 ```cmd
 python -m venv venv
-venv\Scripts\activate.bat
+venv\Scripts\Activate.ps1
 ```
 
 macOS / Linux:
@@ -75,24 +75,30 @@ You do not need to create this file manually.
 
 ## 5. Optional AI Configuration
 
-If you want Gemini-powered AI responses, set `GEMINI_API_KEY`.
+If you want Groq-powered AI responses, set `GROQ_API_KEY`.
 
 PowerShell:
 
 ```powershell
-$env:GEMINI_API_KEY="YOUR_API_KEY_HERE"
+$env:GROQ_API_KEY="YOUR_API_KEY_HERE"
+$env:GROQ_API_URL="https://api.groq.com/openai/v1/chat/completions"
+$env:GROQ_MODEL="llama-3.1-8b-instant"
 ```
 
 CMD:
 
 ```cmd
-set GEMINI_API_KEY=YOUR_API_KEY_HERE
+set GROQ_API_KEY=YOUR_API_KEY_HERE
+set GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
+set GROQ_MODEL=llama-3.1-8b-instant
 ```
 
 macOS / Linux:
 
 ```bash
-export GEMINI_API_KEY="YOUR_API_KEY_HERE"
+export GROQ_API_KEY="YOUR_API_KEY_HERE"
+export GROQ_API_URL="https://api.groq.com/openai/v1/chat/completions"
+export GROQ_MODEL="llama-3.1-8b-instant"
 ```
 
 If the key is missing, the AI panel still works in fallback mode.
@@ -135,7 +141,7 @@ The current tests cover:
 
 - **`ModuleNotFoundError`**: activate the virtual environment and reinstall dependencies.
 - **App opens without the latest UI changes**: do a hard refresh with `Ctrl + F5`.
-- **AI Analyst uses fallback answers**: `GEMINI_API_KEY` is missing or invalid.
+- **AI Analyst uses fallback answers**: `GROQ_API_KEY` is missing or invalid.
 - **Data load errors**: make sure the required Olist CSV files are present directly under `data/`.
 - **Need to rebuild the cached marts**: delete `.cache/analytics_bundle.pkl` and restart the app.
 - **Theme or loading colors look stale**: restart the app and hard refresh the browser.

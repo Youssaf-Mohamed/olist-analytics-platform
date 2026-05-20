@@ -228,7 +228,7 @@ def build_ai_panel() -> html.Div:
                     html.Div(
                         [
                             html.Div(
-                                DashIconify(icon="ph:brain-bold", width=20),
+                                DashIconify(icon="ph:brain-bold", width=22),
                                 className="ai-panel-orb",
                             ),
                             html.Div(
@@ -248,19 +248,26 @@ def build_ai_panel() -> html.Div:
                     html.Button(
                         DashIconify(
                             icon="ph:x-bold",
-                            width=14,
+                            width=16,
                             color="rgba(255,255,255,0.4)",
                         ),
                         id="ai-panel-close",
                         n_clicks=0,
                         className="ai-close-btn",
+                        title="Close panel",
                     ),
                 ],
                 className="ai-panel-header",
             ),
             html.Div(
                 [
-                    html.Div("Live Context", className="ai-context-eyebrow"),
+                    html.Div(
+                        [
+                            DashIconify(icon="ph:info-bold", width=12),
+                            html.Span("Live Context"),
+                        ],
+                        className="ai-context-eyebrow",
+                    ),
                     html.Div("Sales Overview", id="ai-context-title", className="ai-context-title"),
                     html.Div(
                         "0 active filters • 0 headline metrics • Context-aware answers",
@@ -274,7 +281,7 @@ def build_ai_panel() -> html.Div:
                 [
                     html.Button(
                         [
-                            DashIconify(icon="ph:file-text-bold", width=15),
+                            DashIconify(icon="ph:file-text-bold", width=16),
                             html.Span("Executive Summary"),
                         ],
                         id="chat-summary-btn",
@@ -301,12 +308,13 @@ def build_ai_panel() -> html.Div:
                     ),
                     html.Button(
                         [
-                            DashIconify(icon="ph:broom-bold", width=14),
+                            DashIconify(icon="ph:broom-bold", width=16),
                             html.Span("Clear"),
                         ],
                         id="chat-clear-btn",
                         n_clicks=0,
                         className="chat-action-btn chat-action-btn-secondary",
+                        title="Clear chat history",
                     ),
                 ],
                 className="chat-quick-actions",
@@ -319,6 +327,7 @@ def build_ai_panel() -> html.Div:
                 ),
                 type="default",
                 parent_className="chat-loading-shell",
+                color="var(--cyan)",
             ),
             html.Div(
                 [
@@ -333,14 +342,15 @@ def build_ai_panel() -> html.Div:
                                 type="text",
                                 placeholder="Ask about the current page, filters, and KPIs...",
                                 className="chat-input",
-                                debounce=False,
+                                autoComplete="off",
                                 n_submit=0,
                             ),
                             html.Button(
-                                DashIconify(icon="ph:paper-plane-right-fill", width=16),
+                                DashIconify(icon="ph:paper-plane-right-fill", width=18),
                                 id="chat-send",
                                 n_clicks=0,
                                 className="chat-send-btn",
+                                title="Send message",
                             ),
                         ],
                         className="chat-composer",
