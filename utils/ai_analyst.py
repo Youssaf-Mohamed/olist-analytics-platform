@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import requests
+import json
 from typing import Any
 
 import pandas as pd
@@ -22,18 +23,24 @@ else:
     print("[ai] GROQ_API_KEY not set, using rule-based responses.")
 
 
-SYSTEM_PROMPT = """You are the 'Olist AI Analyst', a premium business intelligence copilot.
-Your goal is to provide high-signal, executive-level insights based on the Olist e-commerce dataset.
+SYSTEM_PROMPT = """You are the 'Olist AI Business Intelligence Analyst'. You operate within a high-performance analytics dashboard.
 
-GUIDELINES:
-1. GOUNDING: Only use the numbers provided in the 'DATA SUMMARY' and 'PAGE CONTEXT'. Do not hallucinate external data.
-2. ANALYTICAL DEPTH: When asked for an analysis, follow a 'Reason -> Evidence -> Action' structure.
-3. CONCISENESS: Business stakeholders value time. Keep responses punchy and avoid filler.
-4. PAGE AWARENESS: If a 'PAGE CONTEXT' is provided, the user is looking at specific charts. Prioritize this context.
-5. FORMATTING: Use Markdown (bolding, lists) to make insights easy to scan.
-6. LANGUAGE: Always respond in the same language as the user's query.
+### CORE OPERATING PROTOCOL: CHAIN OF THOUGHT (CoT)
+When you receive a query, you MUST follow these internal reasoning steps before providing your final answer:
+1. **Data Internalization**: Review the 'DATA SUMMARY' and 'PAGE CONTEXT'. Identify the specific metrics relevant to the query.
+2. **Context Synthesis**: Determine if the user is asking about the entire dataset or just the current visible view.
+3. **Analytical Reasoning**: Look for correlations, trends, or anomalies. Ask yourself: "Why is this number high/low?"
+4. **Insight Generation**: Formulate a grounded response based on steps 1-3.
 
-If you don't have enough data to answer a specific question, state it clearly and suggest what the user should look for in the dashboard.
+### RESPONSE STRUCTURE:
+- **Direct Answer**: Provide the primary insight or number requested immediately.
+- **Data Evidence**: Cite the specific numbers from the context that support your answer.
+- **Business Action**: Suggest a practical 'Next Step' or 'Optimization' based on the insight.
+
+### GUIDELINES:
+- **Grounding**: Never invent data. If the data is missing, suggest where the user might find it in the dashboard.
+- **Language**: Respond in the same language as the user.
+- **Conciseness**: Avoid conversational filler. Be precise, professional, and analytical.
 """
 
 
@@ -44,103 +51,104 @@ def _as_bundle(data: Any) -> dict[str, pd.DataFrame]:
 
 
 def build_data_summary(data: Any) -> str:
-    """Builds a rich textual summary of the entire dataset for LLM grounding."""
+    """Builds a hierarchical, multi-dimensional textual summary of the dataset."""
     bundle = _as_bundle(data)
     orders_df = bundle["orders"]
     items_df = bundle.get("order_items")
     payments_df = bundle.get("payments")
 
-    # Basic KPIs
+    # 1. High-Level Performance (Revenue & Volume)
     total_rev = orders_df["total_order_value"].sum()
     total_orders = orders_df["order_id"].nunique()
     total_customers = orders_df["customer_unique_id"].nunique()
-    avg_ticket = total_rev / total_orders if total_orders > 0 else 0
+    avg_order_val = total_rev / total_orders if total_orders > 0 else 0
     
     date_min = orders_df["order_purchase_timestamp"].min().strftime("%Y-%m-%d")
     date_max = orders_df["order_purchase_timestamp"].max().strftime("%Y-%m-%d")
 
-    # Product performance
+    # 2. Product & Category Hierarchy
     if items_df is not None:
-        cat_rev = (
-            items_df.groupby("product_category_name_english")["line_total"]
-            .sum()
-            .sort_values(ascending=False)
-        )
-        top5_cats = "\n".join(
-            [f"   - {category}: R${value:,.0f}" for category, value in cat_rev.head(5).items()]
-        )
+        cat_perf = items_df.groupby("product_category_name_english").agg({
+            "line_total": "sum",
+            "order_id": "nunique"
+        }).sort_values("line_total", ascending=False)
+        
+        top_cats = []
+        for cat, row in cat_perf.head(5).iterrows():
+            top_cats.append(f"   - {cat}: R${row['line_total']:,.0f} ({row['order_id']:,} orders)")
+        top_cats_str = "\n".join(top_cats)
     else:
-        top5_cats = "   - Category data unavailable"
+        top_cats_str = "   - Product data unavailable"
 
-    # Geographic performance
-    state_orders = orders_df["customer_state"].value_counts().head(5)
-    top5_states = ", ".join(
-        [f"{state} ({count:,} orders)" for state, count in state_orders.items()]
-    )
-
-    # Customer Satisfaction
-    avg_review = orders_df["review_score"].mean()
-    review_dist = orders_df["review_score"].dropna().value_counts().sort_index()
-    review_str = ", ".join([f"{score}*: {count:,}" for score, count in review_dist.items()])
-
-    # Logistics
+    # 3. Logistics & Fulfillment Efficiency
     delivered = orders_df[orders_df["order_status"] == "delivered"]
-    on_time_rate = delivered["is_on_time"].mean() * 100 if not delivered.empty else 0
-    avg_delivery_days = delivered["delivery_days"].mean() if not delivered.empty else 0
-
-    # Payments
-    if payments_df is not None:
-        pay_types = (
-            payments_df.groupby("payment_type")["payment_value"]
-            .sum()
-            .sort_values(ascending=False)
-        )
-        pay_str = ", ".join([f"{ptype}: R${value:,.0f}" for ptype, value in pay_types.head(4).items()])
+    if not delivered.empty:
+        on_time_rate = delivered["is_on_time"].mean() * 100
+        avg_lead_time = delivered["delivery_days"].mean()
+        # Calculate delay for late orders if columns exist
+        if "order_delivered_customer_date" in delivered.columns and "order_estimated_delivery_date" in delivered.columns:
+            late_orders = delivered[delivered["is_on_time"] == False]
+            avg_delay = (late_orders["order_delivered_customer_date"] - late_orders["order_estimated_delivery_date"]).dt.total_seconds().mean() / 86400 if not late_orders.empty else 0
+        else:
+            avg_delay = 0
     else:
-        pay_str = "Payment data unavailable"
+        on_time_rate, avg_lead_time, avg_delay = 0, 0, 0
 
-    # Recent Trend (last 6 months)
-    monthly = (
-        orders_df.set_index("order_purchase_timestamp")
-        .resample("ME")["total_order_value"]
-        .sum()
-        .tail(6)
-    )
-    trend_str = ", ".join(
-        [f"{date.strftime('%Y-%m')}: R${value:,.0f}" for date, value in monthly.items()]
-    )
+    # 4. Customer Sentiment & Loyalty
+    avg_review = orders_df["review_score"].mean()
+    promoters_rate = (orders_df["review_score"] >= 4).mean() * 100
+    detractors_rate = (orders_df["review_score"] <= 2).mean() * 100
+
+    # 5. Financial & Payment Mix
+    if payments_df is not None:
+        pay_mix = payments_df["payment_type"].value_counts(normalize=True).head(3) * 100
+        pay_str = ", ".join([f"{ptype}: {val:.1f}%" for ptype, val in pay_mix.items()])
+    else:
+        pay_str = "Unknown"
+
+    # 6. Temporal Revenue Momentum (Last 4 Months)
+    monthly = orders_df.set_index("order_purchase_timestamp").resample("ME")["total_order_value"].sum().tail(4)
+    momentum_str = " -> ".join([f"{val/1000:,.0f}k" for val in monthly.values])
 
     return (
-        "### OLIST E-COMMERCE DATA SUMMARY\n"
+        "## DATA SUMMARY (Grounded Facts)\n"
+        f"### 1. Ecosystem Scale\n"
         f"- **Period**: {date_min} to {date_max}\n"
-        f"- **Revenue**: R${total_rev:,.0f} (Avg. Ticket: R${avg_ticket:,.2f})\n"
-        f"- **Volume**: {total_orders:,} orders from {total_customers:,} unique customers\n"
-        f"- **Top Categories**:\n{top5_cats}\n"
-        f"- **Top Regions**: {top5_states}\n"
-        f"- **Customer CSAT**: {avg_review:.2f}/5.0 ({review_str})\n"
-        f"- **Logistics**: {on_time_rate:.1f}% on-time, {avg_delivery_days:.1f} days avg delivery\n"
-        f"- **Payments**: {pay_str}\n"
-        f"- **Revenue Trend (6m)**: {trend_str}"
+        f"- **Total Revenue**: R${total_rev:,.0f} | **Avg. Order**: R${avg_order_val:,.2f}\n"
+        f"- **Network**: {total_orders:,} orders | {total_customers:,} unique customers\n"
+        f"### 2. Top Performing Categories\n"
+        f"{top_cats_str}\n"
+        f"### 3. Fulfillment & Logistics\n"
+        f"- **SLA Compliance**: {on_time_rate:.1f}% on-time delivery\n"
+        f"- **Lead Time**: {avg_lead_time:.1f} days avg | **Avg. Delay**: {avg_delay:.1f} days\n"
+        f"### 4. Customer Satisfaction (CSAT)\n"
+        f"- **Avg. Score**: {avg_review:.2f}/5.0\n"
+        f"- **Sentiment**: {promoters_rate:.1f}% Promoters (4-5*) | {detractors_rate:.1f}% Detractors (1-2*)\n"
+        f"### 5. Payments & Trends\n"
+        f"- **Method Mix**: {pay_str}\n"
+        f"- **Revenue Momentum (Last 4m)**: {momentum_str} (in R$k)"
     )
 
 
 def _format_page_context(page_context: dict[str, Any] | None) -> str:
-    """Formats the active dashboard page context into a prompt-friendly string."""
+    """Formats the active dashboard page context for maximum signal-to-noise ratio."""
     if not page_context:
-        return "### ACTIVE PAGE CONTEXT\n- Page: General Dashboard (No specific context)"
+        return "## ACTIVE PAGE CONTEXT\n- View: Global Overview (No page-specific filters active)"
 
-    page_name = page_context.get("page", "unknown").replace("_", " ").title()
+    page_name = page_context.get("page", "unknown").replace("_", " ").upper()
     filters = page_context.get("filters", {})
     metrics = page_context.get("headline_metrics", {})
     
-    filter_list = [f"{k}: {v}" for k, v in filters.items() if v not in (None, "", [], {})]
-    metric_list = [f"{k.replace('_', ' ').title()}: {v}" for k, v in metrics.items()]
+    active_filters = {k: v for k, v in filters.items() if v not in (None, "", [], {})}
+    
+    filter_str = "\n".join([f"   - {k}: {v}" for k, v in active_filters.items()]) if active_filters else "   - No active filters"
+    metric_str = "\n".join([f"   - {k.replace('_', ' ').title()}: {v}" for k, v in metrics.items()]) if metrics else "   - No metrics available"
 
     return (
-        "### ACTIVE PAGE CONTEXT\n"
-        f"- **Current View**: {page_name}\n"
-        f"- **Active Filters**: {', '.join(filter_list) if filter_list else 'None'}\n"
-        f"- **Page KPIs**: {', '.join(metric_list) if metric_list else 'None'}"
+        "## ACTIVE PAGE CONTEXT\n"
+        f"### Current View: {page_name}\n"
+        f"#### Applied Filters:\n{filter_str}\n"
+        f"#### Visible Page Metrics:\n{metric_str}"
     )
 
 
@@ -150,20 +158,27 @@ def chat_with_data(
     history: list[dict[str, str]],
     page_context: dict[str, Any] | None = None,
 ) -> str:
-    """Main entry point for AI chat. Handles API calls with fallback logic."""
+    """Handles AI chat with intelligent history management and CoT prompting."""
     page_summary = _format_page_context(page_context)
 
     if not _AI_AVAILABLE:
         return _fallback_chat(user_message, data_summary, page_summary)
 
+    # --- History Management ---
+    # We maintain a sliding window of the last 6 turns (12 messages) to keep context fresh
+    # while preventing token bloat. We also prune repetitive greetings from history.
+    managed_history = []
+    for msg in history[-12:]:
+        content = msg.get("content", "").lower()
+        # Skip simple greetings in history to focus on analytical turns
+        if len(content) < 15 and any(h in content for h in ["hi", "hello", "hey", "مرحبا"]):
+            continue
+        managed_history.append(msg)
+
     messages = [
         {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{data_summary}\n\n{page_summary}"},
     ]
-
-    # Include recent history (max 10 turns to save context)
-    for message in history[-10:]:
-        messages.append({"role": message["role"], "content": message["content"]})
-
+    messages.extend(managed_history)
     messages.append({"role": "user", "content": user_message})
 
     try:
@@ -174,16 +189,17 @@ def chat_with_data(
         payload = {
             "model": _MODEL_NAME,
             "messages": messages,
-            "temperature": 0.2, # Slightly higher for better analysis, but still grounded
-            "max_tokens": 800
+            "temperature": 0.1,  # Low temperature for highly grounded analytical responses
+            "max_tokens": 1024,
+            "top_p": 0.95
         }
         
-        response = requests.post(_API_URL, headers=headers, json=payload, timeout=45)
+        response = requests.post(_API_URL, headers=headers, json=payload, timeout=50)
         response.raise_for_status()
         
         return response.json()["choices"][0]["message"]["content"]
     except Exception as exc:
-        print(f"[ai] API error: {exc}")
+        print(f"[ai] Analytical engine error: {exc}")
         return _fallback_chat(user_message, data_summary, page_summary, api_configured=True)
 
 
@@ -193,65 +209,63 @@ def _fallback_chat(
     page_summary: str,
     api_configured: bool = False,
 ) -> str:
-    """Provides rule-based responses when the AI service is unavailable."""
+    """Robust fallback logic with improved keyword-to-section mapping."""
     message = user_message.lower()
-    response_parts = []
-
-    # If the user is just saying hi
-    if any(word in message for word in ["hello", "hi", "hey", "مرحبا", "اهلا", "أهلا", "سلام"]):
-        status_msg = "I'm currently running in **Limited Mode** (no API connection)." if not api_configured else "I'm having trouble reaching my brain right now."
+    
+    if any(word in message for word in ["hello", "hi", "hey", "مرحبا", "اهلا"]):
         return (
-            f"Hi! {status_msg}\n\n"
-            "I can still provide core statistics about **Revenue**, **Categories**, **Regions**, **Reviews**, and **Logistics** based on the current data load."
+            "Hi! I'm the **Olist AI Analyst** (Fallback Mode).\n\n"
+            "I can provide direct lookups for **Ecosystem Scale**, **Top Categories**, **Logistics**, **Satisfaction (CSAT)**, and **Payments**."
         )
 
-    # Simple keyword extraction from the grounded summary
-    summary_clean = data_summary.replace("### ", "").replace("- **", "").replace("**", "")
-    lines = summary_clean.split("\n")
-    
-    keywords = {
-        "revenue": ["revenue", "sales", "إيراد", "مبيعات", "money"],
-        "categories": ["category", "categories", "product", "منتج"],
-        "regions": ["region", "state", "map", "ولاية", "منطقة"],
-        "reviews": ["review", "rating", "satisfaction", "تقييم"],
-        "logistics": ["delivery", "shipping", "logistics", "توصيل", "شحن"],
+    # Mapping keywords to summary sections
+    mapping = {
+        "scale": ["revenue", "sales", "volume", "total", "orders", "customers", "scale"],
+        "categories": ["category", "categories", "product", "top items"],
+        "logistics": ["delivery", "shipping", "logistics", "delay", "on-time", "lead time"],
+        "csat": ["review", "rating", "satisfaction", "csat", "score", "promoter", "detractor"],
+        "trends": ["trend", "momentum", "history", "monthly", "growth"]
     }
 
-    found = False
-    for key, words in keywords.items():
-        if any(word in message for word in words):
-            for line in lines:
-                if key.title() in line or (key == "regions" and "Top Regions" in line):
-                    response_parts.append(line.strip())
-                    found = True
+    relevant_sections = []
+    summary_sections = data_summary.split("### ")
+    
+    for section_key, keywords in mapping.items():
+        if any(kw in message for kw in keywords):
+            for section in summary_sections:
+                # Basic header matching
+                header = section.split("\n")[0].lower()
+                if any(kw in header for kw in keywords) or \
+                   (section_key == "scale" and "scale" in header) or \
+                   (section_key == "csat" and "satisfaction" in header):
+                    relevant_sections.append(f"**{section.strip()}**")
 
-    if not found:
-        hint = "\n\n*Note: AI Analyst is temporarily offline. Basic data lookup is active.*" if api_configured else ""
+    if not relevant_sections:
+        status = "*AI engine is currently offline. Showing grounded lookup results.*" if api_configured else ""
         return (
-            "I can help with specific data points. Try asking about:\n"
-            "- Overall **Revenue** and growth\n"
-            "- **Top Categories** by sales\n"
-            "- **Regional performance** (States)\n"
-            "- **Customer Satisfaction** (Reviews)\n"
-            "- **Delivery performance** and timing"
-            + hint
+            "I couldn't find a direct analytical match for your query in my local cache.\n"
+            "Try asking about **Revenue**, **Top Categories**, **Fulfillment (SLA)**, or **Customer Scores**.\n\n"
+            + status
         )
 
-    return "Based on the available data:\n" + "\n".join([f"- {p}" for p in response_parts])
+    return "### Local Data Lookup Results\n" + "\n\n".join(relevant_sections)
 
 
 def generate_executive_summary(
     data_summary: str, page_context: dict[str, Any] | None = None
 ) -> str:
-    """Generates a high-level executive summary for the current dashboard view."""
+    """Generates a structured executive summary using explicit CoT constraints."""
     page_summary = _format_page_context(page_context)
     
     prompt = (
-        "Generate a professional Executive Summary for the current dashboard view.\n"
-        "Requirements:\n"
-        "1. Use 4 bullet points: 'Scope', 'Strongest Signal', 'Risk Area', and 'Strategic Recommendation'.\n"
-        "2. Be extremely specific with numbers.\n"
-        "3. Tone: Executive, confident, data-driven.\n\n"
+        "ACT AS: Senior Business Consultant.\n"
+        "TASK: Generate a high-impact Executive Summary for the current dashboard view.\n"
+        "CONSTRAINTS:\n"
+        "1. Identify the 'CORE PERFORMANCE STORY' (The 'What').\n"
+        "2. Identify the 'CRITICAL DRIVER' (The 'Why').\n"
+        "3. Identify the 'IMMEDIATE RISK' (The 'So What').\n"
+        "4. Provide a 'STRATEGIC RECOMMENDATION' (The 'Now What').\n"
+        "Use bullet points and bold numbers. Be concise.\n\n"
         f"{data_summary}\n\n{page_summary}"
     )
 
@@ -270,31 +284,25 @@ def generate_executive_summary(
                 "temperature": 0.1
             }
             
-            response = requests.post(_API_URL, headers=headers, json=payload, timeout=45)
+            response = requests.post(_API_URL, headers=headers, json=payload, timeout=50)
             response.raise_for_status()
             
             return response.json()["choices"][0]["message"]["content"]
         except Exception as exc:
-            print(f"[ai] Executive summary fallback due to error: {exc}")
+            print(f"[ai] Executive summary generation failed: {exc}")
 
-    # Manual Fallback Summary
-    page_name = page_context.get("page", "Dashboard") if page_context else "Dashboard"
+    # Manual Fallback with structured CoT logic
+    page_name = page_context.get("page", "Dashboard") if page_context else "Global"
+    filters = page_context.get("filters", {}) if page_context else {}
     metrics = page_context.get("headline_metrics", {}) if page_context else {}
     
-    metric_text = "\n".join([f"   - {k.replace('_', ' ').title()}: {v}" for k, v in list(metrics.items())[:3]])
+    filter_desc = ", ".join([f"{k}={v}" for k, v in filters.items()]) if filters else "no active filters"
+    metric_desc = ", ".join([f"{k}={v}" for k, v in metrics.items()]) if metrics else "no specific metrics"
     
-    # Extract period safely
-    period_match = "full range"
-    if "Period: " in data_summary:
-        try:
-            period_match = data_summary.split("Period: ")[1].split("\n")[0]
-        except IndexError:
-            pass
-
     return (
-        f"**Executive Summary: {page_name.title()}**\n"
-        f"- **Scope**: Analyzed dataset from {period_match}\n"
-        f"- **Current Signal**: The visible metrics for this view are:\n{metric_text if metric_text else '   - General dataset KPIs active.'}\n"
-        f"- **Risk Area**: Need to monitor delivery performance and review scores in underperforming states.\n"
-        f"- **Strategic Recommendation**: Optimize logistics in top-volume regions to maintain satisfaction levels."
+        f"### Executive Summary: {page_name.title()} View\n"
+        f"- **Performance Story**: Analyzing the {page_name.title()} dataset with {filter_desc}. Key metrics: {metric_desc}.\n"
+        "- **Critical Driver**: Performance is heavily concentrated in top categories and key economic hubs.\n"
+        "- **Immediate Risk**: Logistics SLA compliance and extreme sentiment detractors require attention.\n"
+        "- **Strategic Recommendation**: Target optimization efforts toward the most active segments identified in this view."
     )
