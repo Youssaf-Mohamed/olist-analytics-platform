@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, MagicMock
 
 import app  # noqa: F401 - ensures Dash app exists before page imports
 
@@ -68,7 +69,20 @@ class DashboardCallbackTests(unittest.TestCase):
         self.assertEqual(context["page"], "forecasting")
         self.assertEqual(context["filters"]["horizon_days"], 30)
 
-    def test_executive_summary_includes_page_name(self):
+    @patch("utils.ai_analyst.requests.post")
+    def test_executive_summary_includes_page_name(self, mock_post):
+        # Configure mock response for unit tests to prevent hitting external API
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "choices": [{
+                "message": {
+                    "content": "Cohort analysis: repeat rate is 34.5% on the cohorts page."
+                }
+            }]
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
         summary = generate_executive_summary(
             "Total Revenue: R$100 | Orders: 5",
             {

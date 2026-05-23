@@ -1,7 +1,6 @@
 """
-pages/cohorts.py - Cohort retention and repeat-purchase analytics.
+pages/cohorts.py - Cohort retention analysis
 """
-
 import dash
 from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go

@@ -334,15 +334,19 @@ def build_ai_panel() -> html.Div:
                 ],
                 className="chat-quick-actions",
             ),
-            dcc.Loading(
-                html.Div(
-                    id="chat-messages",
-                    className="chat-messages",
-                    children=build_chat_messages([]),
+            html.Div(
+                dcc.Loading(
+                    html.Div(
+                        id="chat-messages",
+                        className="chat-messages",
+                        children=build_chat_messages([]),
+                    ),
+                    type="circle",
+                    color="var(--cyan)",
+                    parent_className="chat-loading-parent",
+                    className="chat-loading-spinner",
                 ),
-                type="default",
-                parent_className="chat-loading-shell",
-                color="var(--cyan)",
+                className="chat-messages-container",
             ),
             html.Div(
                 [

@@ -831,6 +831,8 @@ clientside_callback(
 if __name__ == "__main__":
     app.run(
         debug=os.getenv("DASH_DEBUG", "").lower() in {"1", "true", "yes"},
+        dev_tools_ui=False,
+        dev_tools_props_check=False,
         host="127.0.0.1",
         port=8050,
     )

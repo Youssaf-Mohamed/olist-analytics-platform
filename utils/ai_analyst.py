@@ -11,6 +11,35 @@ from typing import Any
 
 import pandas as pd
 
+def _load_env_file():
+    # Try importing dotenv
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        return
+    except ImportError:
+        pass
+    
+    # Manual fallback to read .env file in the root/current working directory
+    for path in [".env", "../.env", "d:/programing/Graduation project/Big Data & Analytic/.env"]:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        key, val = line.split("=", 1)
+                        key = key.strip()
+                        val = val.strip()
+                        if val.startswith(('"', "'")) and val.endswith(val[0]):
+                            val = val[1:-1]
+                        os.environ[key] = val
+            except Exception:
+                pass
+
+_load_env_file()
+
 _AI_AVAILABLE = False
 _API_KEY = os.getenv("GROQ_API_KEY", "")
 _API_URL = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
@@ -21,6 +50,7 @@ if _API_KEY:
     print(f"[ai] Groq API ready (model: {_MODEL_NAME}).")
 else:
     print("[ai] GROQ_API_KEY not set, using rule-based responses.")
+
 
 
 SYSTEM_PROMPT = """You are the 'Olist AI Business Intelligence Analyst'. You operate within a high-performance analytics dashboard.
